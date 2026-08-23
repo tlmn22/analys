@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Not part of this Next.js app:
+    "game-tagger/**", // separate Python project
+    "design/**", // static prototype export, not app source
   ]),
 ]);
 
