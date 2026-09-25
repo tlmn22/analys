@@ -24,6 +24,24 @@ test("member sorting supports numeric columns in both directions and keeps missi
   assert.deepEqual(order("name", "desc"), ["c", "b", "a"]);
 });
 
+test("mixed-script names and numeric ties have identical order without runtime collation", () => {
+  const names = ["Jamille", "Үүр", "Өлзий", "Анар", "Уран", "Онон", "Trevon"];
+  const rows = build([], names.map(name => member(name)), [], now).people;
+  const original = String.prototype.localeCompare;
+  try {
+    String.prototype.localeCompare = () => { throw new Error("Runtime collation must not determine rendered row order"); };
+    const expected = ["Анар", "Онон", "Өлзий", "Уран", "Үүр", "Jamille", "Trevon"];
+    for (const key of ["name", "events", "rate", "present"]) {
+      assert.deepEqual([...rows].sort((a, b) => exported.compareMembers(a, b, key, "asc")).map(p => p.member.id), expected);
+    }
+    assert.deepEqual([...rows].sort((a, b) => exported.compareMembers(a, b, "name", "desc")).map(p => p.member.id), [...expected].reverse());
+    assert.ok(exported.compareMemberNames(member("a", { first_name: "Анар" }), member("b", { first_name: "анар" })) < 0);
+    assert.equal(exported.compareMemberNames(member("same", { first_name: "Й" }), member("same", { first_name: "И\u0306" })), 0);
+  } finally {
+    String.prototype.localeCompare = original;
+  }
+});
+
 test("member details preserve historical saved entries, exclude other clubs and distinguish unmarked and future events", () => {
   const person = member("p", { created_at: "2026-09-22T00:00:00Z" });
   const events = [event("old", { start_at: "2026-09-20T00:00:00Z" }), event("saved", { start_at: "2026-09-21T00:00:00Z" }), event("one"), event("other", { club_id: "b" }), event("future", { start_at: "2026-09-25T00:00:00Z", end_at: "2026-09-25T02:00:00Z" })];

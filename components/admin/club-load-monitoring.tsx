@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { buildLoadMonitoring, shiftDay, type LoadBand } from "@/lib/club-load-monitoring";
 import { calendarDay, CLUB_TIME_ZONE } from "@/lib/club-event-calendar";
-import type { ReportAttendance, ReportMember } from "@/lib/club-attendance-report";
+import { compareMemberNames, type ReportAttendance, type ReportMember } from "@/lib/club-attendance-report";
 import type { Club, ClubEvent } from "@/lib/types";
 
 const BANDS: Record<LoadBand, { label: string; range: string; color: string }> = {
@@ -32,7 +32,7 @@ export function ClubLoadMonitoring({ clubs, clubId, isAdmin, events, members, at
   const [selected, setSelected] = useState<string | null>(null);
   const person = report.players.find(p => p.member.id === selected);
   const players = report.players.filter(p => `${p.member.first_name} ${p.member.last_name}`.toLowerCase().includes(search.toLowerCase()) && (band === "all" || (p.band ?? "unknown") === band))
-    .sort((a, b) => (descending ? b.hours - a.hours : a.hours - b.hours) || a.member.first_name.localeCompare(b.member.first_name, "mn"));
+    .sort((a, b) => (descending ? b.hours - a.hours : a.hours - b.hours) || compareMemberNames(a.member, b.member));
   const unknown = report.players.filter(p => !p.band).length;
   const weekLink = (offset: number) => `/admin/club-load-monitoring?club=${encodeURIComponent(clubId)}&week=${shiftDay(from, offset)}`;
   const status = (p: typeof report.players[number]) => p.band ? BANDS[p.band].label : !report.weekComplete ? "Долоо хоног дуусаагүй" : !p.completed ? "Өгөгдөлгүй" : "Ирц дутуу";

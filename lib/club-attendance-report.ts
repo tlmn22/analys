@@ -12,8 +12,29 @@ export function attendanceRate(counts: AttendanceCounts): number | null {
 
 export type MemberSortKey = "name" | "events" | "rate" | keyof AttendanceCounts;
 type MemberSummary = ReturnType<typeof buildAttendanceReport>["people"][number];
+// Explicit Mongolian order: ICU locale support differs between Node and browsers.
+const nameAlphabet = "абвгдеёжзийклмноөпрстуүфхцчшщъыьэюяabcdefghijklmnopqrstuvwxyz";
+function compareNameText(left: string, right: string) {
+  const a = Array.from(left.normalize("NFC").toLowerCase());
+  const b = Array.from(right.normalize("NFC").toLowerCase());
+  const rank = (char: string) => {
+    const index = nameAlphabet.indexOf(char);
+    return index < 0 ? nameAlphabet.length + char.codePointAt(0)! : index;
+  };
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const difference = rank(a[i]) - rank(b[i]);
+    if (difference) return difference;
+  }
+  return a.length - b.length;
+}
+
+export function compareMemberNames(a: ReportMember, b: ReportMember) {
+  return compareNameText(`${a.first_name} ${a.last_name}`, `${b.first_name} ${b.last_name}`)
+    || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+
 export function compareMembers(a: MemberSummary, b: MemberSummary, key: MemberSortKey, direction: "asc" | "desc") {
-  const nameOrder = `${a.member.first_name} ${a.member.last_name}`.localeCompare(`${b.member.first_name} ${b.member.last_name}`, "mn") || a.member.id.localeCompare(b.member.id);
+  const nameOrder = compareMemberNames(a.member, b.member);
   if (key === "name") return direction === "asc" ? nameOrder : -nameOrder;
   const left = key === "rate" ? a.rate : key === "events" ? a.events : a.counts[key];
   const right = key === "rate" ? b.rate : key === "events" ? b.events : b.counts[key];
