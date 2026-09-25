@@ -1,4 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getEventEditor } from "@/lib/club-event-access";
+import { redirect } from "next/navigation";
 import type { Club, ClubStaffWithClub } from "@/lib/types";
 import {
   Table,
@@ -16,15 +18,21 @@ import { deleteClubStaff } from "./actions";
 import { PlusIcon, PencilIcon } from "lucide-react";
 
 export default async function ClubStaffPage() {
+  const editor = await getEventEditor();
+  if (!editor) redirect("/admin/login");
+  const isAdmin = editor.role === "superadmin";
   const db = supabaseAdmin();
-
+  let staffQuery = db.from("club_staff")
+    .select("id, club_id, first_name, last_name, email, role, created_at, club:clubs(id, name)")
+    .order("created_at", { ascending: false });
+  let clubsQuery = db.from("clubs").select("id, name").order("name");
+  if (editor.role === "club_staff") {
+    staffQuery = staffQuery.eq("club_id", editor.clubId);
+    clubsQuery = clubsQuery.eq("id", editor.clubId);
+  }
   const [staffRes, clubsRes] = await Promise.all([
-    db
-      .from("club_staff")
-      .select("id, club_id, first_name, last_name, email, role, created_at, club:clubs(id, name)")
-      .order("created_at", { ascending: false })
-      .returns<ClubStaffWithClub[]>(),
-    db.from("clubs").select("id, name").order("name").returns<Pick<Club, "id" | "name">[]>(),
+    staffQuery.returns<ClubStaffWithClub[]>(),
+    clubsQuery.returns<Pick<Club, "id" | "name">[]>(),
   ]);
 
   if (staffRes.error) {
@@ -40,11 +48,10 @@ export default async function ClubStaffPage() {
         <div>
           <h1 className="text-2xl font-semibold">Клубын ажилтнууд</h1>
           <p className="text-sm text-muted-foreground">
-            Нийт {staff.length} ажилтан бүртгэгдсэн — owner/manager/head coach/assistant coach.
-            Нэвтрэх эрхийн логик дараа хийгдэнэ, энд зөвхөн бүртгэл.
+            Нийт {staff.length} гишүүн бүртгэгдсэн. {isAdmin ? "Бүх клубын гишүүд." : "Өөрийн клубын гишүүд."}
           </p>
         </div>
-        <ClubStaffFormDialog
+        {isAdmin && <ClubStaffFormDialog
           clubs={clubs}
           trigger={
             <Button disabled={clubs.length === 0}>
@@ -52,10 +59,10 @@ export default async function ClubStaffPage() {
               Ажилтан нэмэх
             </Button>
           }
-        />
+        />}
       </div>
 
-      {clubs.length === 0 && (
+      {isAdmin && clubs.length === 0 && (
         <p className="text-sm text-muted-foreground">
           Эхлээд дор хаяж нэг клуб бүртгэнэ үү (Клубууд хэсэгт).
         </p>
@@ -69,13 +76,13 @@ export default async function ClubStaffPage() {
               <TableHead>Email</TableHead>
               <TableHead>Клуб</TableHead>
               <TableHead>Эрх</TableHead>
-              <TableHead className="w-24 text-right">Үйлдэл</TableHead>
+              {isAdmin && <TableHead className="w-24 text-right">Үйлдэл</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {staff.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={isAdmin ? 5 : 4} className="py-8 text-center text-muted-foreground">
                   Ажилтан бүртгэгдээгүй байна
                 </TableCell>
               </TableRow>
@@ -90,7 +97,7 @@ export default async function ClubStaffPage() {
                 <TableCell>
                   <Badge variant="secondary">{ROLE_LABELS[s.role]}</Badge>
                 </TableCell>
-                <TableCell>
+                {isAdmin && <TableCell>
                   <div className="flex justify-end gap-1">
                     <ClubStaffFormDialog
                       clubs={clubs}
@@ -107,7 +114,7 @@ export default async function ClubStaffPage() {
                       confirmText={`"${s.first_name} ${s.last_name}"-ийг устгах уу?`}
                     />
                   </div>
-                </TableCell>
+                </TableCell>}
               </TableRow>
             ))}
           </TableBody>

@@ -8,7 +8,7 @@ import ts from "typescript";
 function load(file, imports) {
   const source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX },
   });
   const loadedModule = { exports: {} };
   const require = (name) => {
@@ -84,6 +84,55 @@ function form(values) {
   for (const [key, value] of Object.entries(values)) data.set(key, value);
   return data;
 }
+
+test("staff page scopes both queries to the current club and rejects unauthenticated users", async () => {
+  for (const role of [null, "player", "owner", "manager", "head_coach", "assistant_coach", "superadmin"]) {
+    const access = setup(role);
+    const queries = [];
+    const page = load("app/admin/(dashboard)/club-staff/page.tsx", {
+      "react/jsx-runtime": { jsx: () => null, jsxs: () => null },
+      "@/lib/club-event-access": access,
+      "next/navigation": { redirect: () => { throw new Error("LOGIN_REQUIRED"); } },
+      "@/lib/supabase/server": { supabaseAdmin: () => ({ from(table) {
+        const record = { table, filters: [] }; queries.push(record);
+        const query = {
+          select(columns) { assert.ok(!columns.includes("password")); return query; },
+          order() { return query; },
+          eq(key, value) { record.filters.push([key, value]); return query; },
+          returns() { return Promise.resolve({ data: [], error: null }); },
+        }; return query;
+      } }) },
+      "@/components/ui/table": {}, "@/components/ui/button": {}, "@/components/ui/badge": {},
+      "@/components/admin/club-staff-form-dialog": {}, "@/components/admin/delete-button": {},
+      "./actions": {}, "lucide-react": {},
+    });
+    if (!role || role === "player") {
+      await assert.rejects(page.default(), /LOGIN_REQUIRED/);
+      assert.equal(queries.length, 0);
+    } else {
+      await page.default();
+      assert.deepEqual(queries, [
+        { table: "club_staff", filters: role === "superadmin" ? [] : [["club_id", "club-a"]] },
+        { table: "clubs", filters: role === "superadmin" ? [] : [["id", "club-a"]] },
+      ]);
+    }
+  }
+});
+
+test("proxy restricts club staff to the four permitted sections", async () => {
+  for (const role of ["superadmin", "club_staff"]) {
+    const { proxy } = load("proxy.ts", {
+      "next/server": { NextResponse: { next: () => "allowed", redirect: () => "redirected" } },
+      "@/lib/auth": { SESSION_COOKIE_NAME: "admin_session", readSessionToken: async () => ({ role }) },
+    });
+    for (const path of ["/admin", "/admin/teams", "/admin/players", "/admin/seasons", "/admin/clubs", "/admin/tag/game", "/admin/club-staff/invalid"]) {
+      assert.equal(await proxy({ nextUrl: new URL(`https://example.com${path}`), url: `https://example.com${path}`, cookies: { get: () => ({ value: "token" }) } }), role === "superadmin" ? "allowed" : "redirected");
+    }
+    for (const path of ["/admin/club-staff", "/admin/club-events", "/admin/club-events/event-a/attendance", "/admin/club-reports", "/admin/club-load-monitoring"]) {
+      assert.equal(await proxy({ nextUrl: new URL(`https://example.com${path}`), url: `https://example.com${path}`, cookies: { get: () => ({ value: "token" }) } }), "allowed");
+    }
+  }
+});
 
 for (const role of ["superadmin", "owner", "manager", "head_coach", "assistant_coach"]) {
   test(`${role} can mark player attendance in their club`, async () => {

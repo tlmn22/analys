@@ -16,7 +16,7 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (session.role === "club_staff" && !/^\/admin\/(?:club-events(?:\/[^/]+\/attendance)?|club-reports|club-load-monitoring)\/?$/.test(pathname)) {
+  if (session.role === "club_staff" && !/^\/admin\/(?:club-staff|club-events(?:\/[^/]+\/attendance)?|club-reports|club-load-monitoring)\/?$/.test(pathname)) {
     return NextResponse.redirect(new URL("/admin/club-events", req.url));
   }
 

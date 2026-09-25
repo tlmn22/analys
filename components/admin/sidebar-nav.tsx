@@ -34,7 +34,7 @@ export function SidebarNav({ eventsOnly = false }: { eventsOnly?: boolean }) {
 
   return (
     <nav className="flex flex-1 flex-col gap-1">
-      {(eventsOnly ? [clubNavItems.filter((item) => ["/admin/club-events", "/admin/club-reports", "/admin/club-load-monitoring"].includes(item.href))] : [navItems, clubNavItems]).map((items, groupIndex) => (
+      {(eventsOnly ? [clubNavItems.filter((item) => ["/admin/club-staff", "/admin/club-events", "/admin/club-reports", "/admin/club-load-monitoring"].includes(item.href))] : [navItems, clubNavItems]).map((items, groupIndex) => (
         <div
           key={groupIndex}
           className={cn(
