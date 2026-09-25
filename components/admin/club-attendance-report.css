@@ -10,6 +10,21 @@
 .cr :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Card */
+.cr-load-filters { display:flex; flex-wrap:wrap; align-items:end; gap:var(--space-4); padding:var(--space-5); }
+.cr-load-filters .cr-field { flex:1 1 200px; }
+.cr-load-kpi { text-align:left; cursor:pointer; color:var(--ink); }
+.cr-load-kpi:hover, .cr-load-kpi.selected { border-color:var(--brand); background:var(--brand-soft); }
+.cr-load-kpi.selected { box-shadow:0 0 0 1px var(--brand); }
+.cr-load-dot { width:8px; height:8px; border-radius:50%; background:var(--load-color); }
+.cr-load-fill { background:var(--load-color); }
+.cr .load-low { --load-color:var(--status-excused); }
+.cr .load-normal { --load-color:var(--status-present); }
+.cr .load-high { --load-color:var(--status-late); }
+.cr .load-over { --load-color:var(--status-absent); }
+.cr .load-unknown { --load-color:var(--status-unmarked); }
+.cr-load-notice { padding:var(--space-4); border-radius:var(--radius-md); background:var(--warning-soft); color:var(--warning-ink); font-size:13px; }
+.cr-load-name { text-align:left; font-weight:600; color:var(--brand); cursor:pointer; }
+.cr-load-name:hover { text-decoration:underline; }
 .cr-card { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); }
 .cr-card-h { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: var(--space-5) var(--space-5) 0; }
 .cr-card-t { font-size: 16px; line-height: 22px; font-weight: 600; margin: 0; }
