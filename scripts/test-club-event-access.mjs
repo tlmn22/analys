@@ -102,7 +102,7 @@ test("staff page scopes both queries to the current club and rejects unauthentic
           returns() { return Promise.resolve({ data: [], error: null }); },
         }; return query;
       } }) },
-      "@/components/ui/table": {}, "@/components/ui/button": {}, "@/components/ui/badge": {},
+      "@/components/admin/club-staff-table": {}, "@/components/ui/table": {}, "@/components/ui/button": {}, "@/components/ui/badge": {},
       "@/components/admin/club-staff-form-dialog": {}, "@/components/admin/delete-button": {},
       "./actions": {}, "lucide-react": {},
     });
