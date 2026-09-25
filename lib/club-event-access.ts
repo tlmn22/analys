@@ -2,8 +2,9 @@ import "server-only";
 import { cookies } from "next/headers";
 import { readSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import type { ClubStaffRole } from "@/lib/types";
 
-export type EventEditor = { role: "superadmin" } | { role: "club_staff"; clubId: string; staffId: string };
+export type EventEditor = { role: "superadmin" } | { role: "club_staff"; clubId: string; staffId: string; staffRole: ClubStaffRole };
 
 export async function getEventEditor(): Promise<EventEditor | null> {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
@@ -14,7 +15,7 @@ export async function getEventEditor(): Promise<EventEditor | null> {
   const { data, error } = await supabaseAdmin().from("club_staff")
     .select("id, club_id, role").eq("id", session.staffId).maybeSingle();
   if (error || !data || !["owner", "manager", "head_coach", "assistant_coach"].includes(data.role)) return null;
-  return { role: "club_staff", clubId: data.club_id, staffId: data.id };
+  return { role: "club_staff", clubId: data.club_id, staffId: data.id, staffRole: data.role };
 }
 
 export async function requireSuperadmin(): Promise<void> {

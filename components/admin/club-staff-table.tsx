@@ -25,8 +25,8 @@ const columns: { key: SortKey; label: string }[] = [
   { key: "club", label: "Клуб" }, { key: "role", label: "Үүрэг" },
 ];
 
-export function ClubStaffTable({ staff, clubs, isAdmin }: {
-  staff: ClubStaffWithClub[]; clubs: Pick<Club, "id" | "name">[]; isAdmin: boolean;
+export function ClubStaffTable({ staff, clubs, isAdmin, canManage }: {
+  staff: ClubStaffWithClub[]; clubs: Pick<Club, "id" | "name">[]; isAdmin: boolean; canManage: boolean;
 }) {
   const [sort, setSort] = useState<SortKey>("name");
   const [direction, setDirection] = useState<"asc" | "desc">("asc");
@@ -47,7 +47,7 @@ export function ClubStaffTable({ staff, clubs, isAdmin }: {
             Нийт {staff.length} гишүүн бүртгэгдсэн. {isAdmin ? "Бүх клубын гишүүд." : "Өөрийн клубын гишүүд."}
           </p>
         </div>
-        {isAdmin && <ClubStaffFormDialog
+        {canManage && <ClubStaffFormDialog
           clubs={clubs}
           trigger={
             <Button disabled={clubs.length === 0}>
@@ -73,13 +73,13 @@ export function ClubStaffTable({ staff, clubs, isAdmin }: {
                   {column.label}<span aria-hidden="true">{sort === column.key ? direction === "asc" ? "↑" : "↓" : "↕"}</span>
                 </button>
               </TableHead>)}
-              {isAdmin && <TableHead className="w-24 text-right">Үйлдэл</TableHead>}
+              {canManage && <TableHead className="w-24 text-right">Үйлдэл</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {staff.length === 0 && (
               <TableRow>
-                <TableCell colSpan={isAdmin ? 5 : 4} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={canManage ? 5 : 4} className="py-8 text-center text-muted-foreground">
                   Ажилтан бүртгэгдээгүй байна
                 </TableCell>
               </TableRow>
@@ -94,7 +94,7 @@ export function ClubStaffTable({ staff, clubs, isAdmin }: {
                 <TableCell>
                   <Badge variant="secondary" className={s.role === "player" ? "bg-blue-500/10 text-blue-700 dark:text-blue-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}>{ROLE_LABELS[s.role]}</Badge>
                 </TableCell>
-                {isAdmin && <TableCell>
+                {canManage && <TableCell>
                   <div className="flex justify-end gap-1">
                     <ClubStaffFormDialog
                       clubs={clubs}
@@ -106,10 +106,10 @@ export function ClubStaffTable({ staff, clubs, isAdmin }: {
                         </Button>
                       }
                     />
-                    <DeleteButton
+                    {isAdmin && <DeleteButton
                       action={deleteClubStaff.bind(null, s.id)}
                       confirmText={`"${s.first_name} ${s.last_name}"-ийг устгах уу?`}
-                    />
+                    />}
                   </div>
                 </TableCell>}
               </TableRow>

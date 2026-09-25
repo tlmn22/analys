@@ -29,5 +29,6 @@ export default async function ClubStaffPage() {
   const staff = staffRes.data ?? [];
   const clubs = clubsRes.data ?? [];
 
-  return <ClubStaffTable staff={staff} clubs={clubs} isAdmin={isAdmin} />;
+  const canManage = editor.role === "superadmin" || editor.staffRole === "manager";
+  return <ClubStaffTable staff={staff} clubs={clubs} isAdmin={isAdmin} canManage={canManage} />;
 }

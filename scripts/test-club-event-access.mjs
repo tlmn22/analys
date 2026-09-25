@@ -85,6 +85,47 @@ function form(values) {
   return data;
 }
 
+test("only managers and admins can create/update staff, with club-scoped password resets", async () => {
+  for (const role of [null, "player", "owner", "head_coach", "assistant_coach", "manager", "superadmin"]) {
+    const access = setup(role);
+    const writes = [];
+    const actions = load("app/admin/(dashboard)/club-staff/actions.ts", {
+      "@/lib/club-event-access": access,
+      "next/cache": { revalidatePath() {} },
+      "@/lib/password": { hashPassword: async value => `hashed:${value}` },
+      "@/lib/supabase/server": { supabaseAdmin: () => ({ from() { return {
+        async insert(values) { writes.push(values); return { error: null }; },
+        update(values) {
+          const filters = {};
+          const query = {
+            eq(key, value) { filters[key] = value; return query; }, select() { return query; },
+            async maybeSingle() {
+              if (filters.club_id && filters.id === "other-club-person") return { data: null, error: null };
+              writes.push({ ...values, filters }); return { data: { id: filters.id }, error: null };
+            },
+          }; return query;
+        },
+      }; } }) },
+    });
+    const input = overrides => form({ club_id: "club-a", first_name: "Test", last_name: "Person", email: "test@example.com", role: "player", password: "new-password", ...overrides });
+    const allowed = role === "manager" || role === "superadmin";
+    assert.equal((await actions.createClubStaff({}, input())).success === true, allowed);
+    assert.equal((await actions.updateClubStaff("own-person", {}, input())).success === true, allowed);
+    if (!allowed) { assert.equal(writes.length, 0); continue; }
+    assert.equal(writes[1].password_hash, "hashed:new-password");
+    if (role === "manager") {
+      assert.equal(writes[1].filters.club_id, "club-a");
+      assert.ok((await actions.createClubStaff({}, input({ club_id: "club-b" }))).error);
+      assert.ok((await actions.updateClubStaff("own-person", {}, input({ club_id: "club-b" }))).error);
+      assert.ok((await actions.updateClubStaff("other-club-person", {}, input())).error);
+      assert.equal(writes.length, 2);
+      await assert.rejects(actions.deleteClubStaff("own-person"));
+      access.state.people[0].role = "head_coach";
+      assert.ok((await actions.updateClubStaff("own-person", {}, input())).error);
+    }
+  }
+});
+
 test("staff page scopes both queries to the current club and rejects unauthenticated users", async () => {
   for (const role of [null, "player", "owner", "manager", "head_coach", "assistant_coach", "superadmin"]) {
     const access = setup(role);

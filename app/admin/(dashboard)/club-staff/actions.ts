@@ -1,6 +1,6 @@
 "use server";
 
-import { requireSuperadmin } from "@/lib/club-event-access";
+import { getEventEditor, requireSuperadmin } from "@/lib/club-event-access";
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
@@ -37,9 +37,11 @@ export async function createClubStaff(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireSuperadmin();
+  const editor = await getEventEditor();
+  if (!editor || (editor.role !== "superadmin" && editor.staffRole !== "manager")) return { error: "Энэ үйлдлийг хийх эрхгүй байна." };
   const parsed = parseClubStaffInput(formData);
   if ("error" in parsed) return { error: parsed.error };
+  if (editor.role === "club_staff" && parsed.clubId !== editor.clubId) return { error: "Зөвхөн өөрийн клубын ажилтныг бүртгэнэ." };
 
   const password = String(formData.get("password") || "");
   if (password.length < 8) return { error: "Нууц үг доод тал нь 8 тэмдэгттэй байна" };
@@ -70,9 +72,11 @@ export async function updateClubStaff(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireSuperadmin();
+  const editor = await getEventEditor();
+  if (!editor || (editor.role !== "superadmin" && editor.staffRole !== "manager")) return { error: "Энэ үйлдлийг хийх эрхгүй байна." };
   const parsed = parseClubStaffInput(formData);
   if ("error" in parsed) return { error: parsed.error };
+  if (editor.role === "club_staff" && parsed.clubId !== editor.clubId) return { error: "Зөвхөн өөрийн клубын ажилтныг засна." };
 
   const update: Record<string, unknown> = {
     club_id: parsed.clubId,
@@ -88,12 +92,15 @@ export async function updateClubStaff(
     update.password_hash = await hashPassword(password);
   }
 
-  const { error } = await supabaseAdmin().from("club_staff").update(update).eq("id", id);
+  let query = supabaseAdmin().from("club_staff").update(update).eq("id", id);
+  if (editor.role === "club_staff") query = query.eq("club_id", editor.clubId);
+  const { data, error } = await query.select("id").maybeSingle();
   if (error) {
     if (error.code === "23505") return { error: "Энэ email хаяг бүртгэлтэй байна" };
     return { error: error.message };
   }
 
+  if (!data) return { error: "Ажилтан олдсонгүй эсвэл засах эрхгүй байна." };
   revalidatePath("/admin/club-staff");
   return { success: true };
 }
