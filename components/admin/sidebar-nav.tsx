@@ -14,14 +14,14 @@ import {
   ChartNoAxesCombinedIcon,
 } from "lucide-react";
 
-const navItems = [
+export const navItems = [
   { href: "/admin", label: "Хянах самбар", icon: LayoutDashboardIcon },
   { href: "/admin/teams", label: "Багууд", icon: ShieldIcon },
   { href: "/admin/players", label: "Тоглогчид", icon: UsersIcon },
   { href: "/admin/seasons", label: "Улирлууд", icon: CalendarIcon },
 ];
 
-const clubNavItems = [
+export const clubNavItems = [
   { href: "/admin/clubs", label: "Клубууд", icon: Building2Icon },
   { href: "/admin/club-staff", label: "Клубын ажилтнууд", icon: IdCardIcon },
   { href: "/admin/club-events", label: "Клубын эвентүүд", icon: CalendarCheckIcon },
