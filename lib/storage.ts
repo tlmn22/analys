@@ -5,7 +5,7 @@ const BUCKET = "images";
 
 export async function uploadImage(
   file: File,
-  folder: "teams" | "players"
+  folder: "teams" | "players" | "clubs"
 ): Promise<string> {
   const ext = file.name.split(".").pop() || "jpg";
   const path = `${folder}/${crypto.randomUUID()}.${ext}`;

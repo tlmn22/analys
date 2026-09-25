@@ -1,4 +1,5 @@
 import type { EventColor } from "@/lib/tag-events";
+import type { DecisionQuality } from "@/lib/decision-quality";
 
 export interface RosterPlayer {
   playerId: string;
@@ -22,6 +23,7 @@ export function playerLabel(p: RosterPlayer): string {
 }
 
 export interface TaggedEvent {
+  decisionQuality?: DecisionQuality;
   id: string;
   period: number;
   clockTime: number;
@@ -36,6 +38,8 @@ export interface TaggedEvent {
   points: number | null;
   keyEvent: boolean;
   shotType?: string | null;
+  shotDetails?: ShotDetails;
+  assistPlayerId?: string | null;
   defenderLabel?: string | null;
   assistType?: string | null;
   turnoverType?: string | null;
@@ -43,6 +47,7 @@ export interface TaggedEvent {
   screenSetType?: string | null;
   screenRcvdType?: string | null;
   screenerLabel?: string | null;
+  screenTargetLabel?: string | null;
   hustlePlayType?: string | null;
   setOffenseName?: string | null;
   blobPlayName?: string | null;
@@ -51,12 +56,14 @@ export interface TaggedEvent {
   slobOutcome?: string | null;
   manToManType?: string | null;
   zoneType?: string | null;
+  pressType?: string | null;
   offActionType?: string | null;
   defCoverageType?: string | null;
   defOffballType?: string | null;
   physicalContactType?: string | null;
   physicalContactSecondLabel?: string | null;
   physicalContactWinnerLabel?: string | null;
+  boxoutType?: string | null;
 }
 
 export interface ShotDetails {

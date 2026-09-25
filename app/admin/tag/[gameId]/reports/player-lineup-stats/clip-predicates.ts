@@ -29,6 +29,8 @@ export function eventsForColumn(
             (playerId ? e.playerId === playerId : true)) ||
           (playerId ? e.assistPlayerId === playerId : e.teamId === teamId && !!e.assistPlayerId)
       );
+    case "otherAssist":
+      return mine.filter((e) => e.eventType === "other_assist");
     case "shots":
     case "efg":
       return mine.filter((e) => SHOT_2_3_TYPES.has(e.eventType));
@@ -59,6 +61,8 @@ export function eventsForColumn(
       return mine.filter((e) => e.eventType === "screen_set" || e.eventType === "screen_rcvd");
     case "to":
       return mine.filter((e) => e.eventType === "turnover");
+    case "forcedTo":
+      return mine.filter((e) => e.eventType === "forced_to");
     case "usage":
       return mine.filter(
         (e) => SHOT_2_3_TYPES.has(e.eventType) || FT_TYPES.has(e.eventType) || e.eventType === "turnover"
@@ -71,6 +75,7 @@ export function eventsForColumn(
 export const CLICKABLE_COLUMNS = new Set([
   "pts",
   "ast",
+  "otherAssist",
   "shots",
   "opps",
   "efg",
@@ -89,6 +94,7 @@ export const CLICKABLE_COLUMNS = new Set([
   "offFoul",
   "offActionTag",
   "to",
+  "forcedTo",
   "usage",
 ]);
 

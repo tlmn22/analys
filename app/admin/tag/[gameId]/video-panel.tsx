@@ -30,6 +30,10 @@ export interface VideoPanelHandle {
   getSnapshot: () => { clockTime: number; videoTime: number };
   seekTo: (seconds: number) => void;
   pause: () => void;
+  play: () => void;
+  isPlaying: () => boolean;
+  isReady: () => boolean;
+  setClock: (seconds: number) => void;
   /** Called when "End Quarter" is tagged — the game clock otherwise stays
    * wherever it was left (usually near 0:00), silently corrupting every
    * event's clock_time for the next period if nobody retypes it by hand. */
@@ -79,9 +83,13 @@ export const VideoPanel = forwardRef<
         getSnapshot: () => ({ clockTime: gameClock, videoTime: getCurrentTime() }),
         seekTo,
         pause,
+        play,
+        isPlaying: () => playing,
+        isReady: () => ready,
+        setClock: setGameClock,
         resetClock: () => setGameClock(PERIOD_START_SECONDS),
       }),
-      [gameClock, getCurrentTime, seekTo, pause]
+      [gameClock, getCurrentTime, seekTo, pause, play, playing, ready]
     );
 
     function applyClockInput() {

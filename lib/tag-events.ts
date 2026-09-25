@@ -25,9 +25,15 @@ export interface ModifierOption {
  * detail pick beyond just the player (turnover, off_foul, screen_set,
  * screen_rcvd, ...). */
 export interface TypeDetailConfig {
-  otherLabel: string;
+  /** Omit when the type list is exhaustive (e.g. Good/Bad) and no free-form
+   * fallback makes sense — the "?" fallback row is only rendered when set. */
+  otherLabel?: string;
   types: TypeOption[];
   modifiers?: ModifierOption[];
+  /** When true, the type list is picked first and the player second
+   * (reversed from the default player -> type order) — e.g. Boxout, where
+   * the call quality doesn't depend on who's picked. */
+  typeFirst?: boolean;
   /** When set, inserts a second player-pick stage (e.g. "who set the
    * screen?") between the main player pick and the type list. Shown as
    * the stage heading. */
@@ -87,11 +93,11 @@ export interface PlayNameConfig {
 export const SHOT_MODIFIERS: { field: string; label: string }[] = [
   { field: "andOne", label: "and 1" },
   { field: "badMiss", label: "bad miss" },
-  { field: "contestedClose", label: "contested (< 2 ft.)" },
+  { field: "contestedClose", label: "contested (< 0.6 m.)" },
   { field: "lateClock", label: "late clock" },
-  { field: "lightlyContested", label: "lightly contested (< 4 ft.)" },
-  { field: "uncontested", label: "uncontested (< 6 ft.)" },
-  { field: "wideOpen", label: "wide open (> 6ft.)" },
+  { field: "lightlyContested", label: "lightly contested (< 1.2 m.)" },
+  { field: "uncontested", label: "uncontested (< 1.8 m.)" },
+  { field: "wideOpen", label: "wide open (> 1.8 m.)" },
 ];
 
 export const SHOT_TYPES_2PT: string[] = [
@@ -172,8 +178,14 @@ export const DEF_FOUL_TYPES: TypeOption[] = [
 ];
 
 export const SCREEN_SET_TYPES: TypeOption[] = [
+  { key: "", label: "Back Screen" },
+  { key: "", label: "Cross Screen" },
   { key: "", label: "DHO" },
+  { key: "", label: "Down Screen" },
+  { key: "", label: "Elevator Screen" },
+  { key: "", label: "Flare Screen" },
   { key: "", label: "Handoff" },
+  { key: "", label: "Pin Down" },
   { key: "p", label: "Pop" },
   { key: "s", label: "Rescreen" },
   { key: "r", label: "Roll" },
@@ -217,6 +229,13 @@ export const PHYSICAL_CONTACT_TYPES: TypeOption[] = [
   { key: "", label: "Rim/Body Contact" },
   { key: "", label: "Shot Contest" },
   { key: "", label: "Charge Draw" },
+];
+
+/** Boxout call quality, picked before the player (unlike other typeDetail
+ * events) — a boxout is judged good/bad independent of who executed it. */
+export const BOXOUT_TYPES: TypeOption[] = [
+  { key: "g", label: "Good" },
+  { key: "b", label: "Bad" },
 ];
 
 export const STOPPED: EventDef[] = [
@@ -270,7 +289,11 @@ export const OFFENSE: EventDef[] = [
     needsPlayer: true,
     side: "off",
     color: "outline",
-    typeDetail: { otherLabel: "Other Screen Set", types: SCREEN_SET_TYPES },
+    typeDetail: {
+      otherLabel: "Other Screen Set",
+      types: SCREEN_SET_TYPES,
+      secondPlayerLabel: "Who was the screen set for?",
+    },
   },
   {
     key: "",
@@ -309,8 +332,19 @@ export const DEFENSE: EventDef[] = [
   { key: "", label: "Good Bump", type: "good_bump", needsPlayer: true, side: "def", color: "blue" },
 ];
 
-// Collapsed in the reference ("show more") — content not yet specified.
-export const OTHER: EventDef[] = [];
+// Always-visible "Other Player Events" — either team's on-court players can
+// commit these, so they show all 10 (bothTeams).
+export const OTHER: EventDef[] = [
+  {
+    key: "x",
+    label: "Boxout",
+    type: "boxout",
+    needsPlayer: true,
+    color: "gray",
+    bothTeams: true,
+    typeDetail: { types: BOXOUT_TYPES, typeFirst: true },
+  },
+];
 
 /** Shown in the "More Other Player Events" overlay, opened from the "Other
  * Player Events" section's "(show more)" link. Not tied to offense/defense
@@ -416,6 +450,15 @@ export const ZONE_TYPES: TypeOption[] = [
   { key: "", label: "2-1-2" },
 ];
 
+export const PRESS_TYPES: TypeOption[] = [
+  { key: "", label: "Full Court Man to Man" },
+  { key: "", label: "Half Court Man to Man" },
+  { key: "", label: "1-2-2" },
+  { key: "", label: "2-2-1" },
+  { key: "", label: "1-3-1" },
+  { key: "", label: "Diamond" },
+];
+
 /** On-ball PnR coverage calls. Tagged against the defense team only, no
  * player. */
 export const DEF_COVERAGE_TYPES: TypeOption[] = [
@@ -457,7 +500,15 @@ export const DEFENSE_TEAM_SETS: EventDef[] = [
     color: "orange",
     typeDetail: { otherLabel: "Other Zone", types: ZONE_TYPES },
   },
-  { key: "P", label: "Press", type: "press", needsPlayer: false, side: "def", color: "orange" },
+  {
+    key: "P",
+    label: "Press",
+    type: "press",
+    needsPlayer: false,
+    side: "def",
+    color: "orange",
+    typeDetail: { otherLabel: "Other Press", types: PRESS_TYPES },
+  },
   { key: "O", label: "Other Defense", type: "other_defense", needsPlayer: false, side: "def", color: "orange" },
   {
     key: "",
@@ -505,6 +556,7 @@ export const EDITABLE_EVENTS: EventDef[] = [
   ...STOPPED.filter((e) => e.type !== "sub" && e.type !== "end_quarter"),
   ...OFFENSE,
   ...DEFENSE,
+  ...OTHER,
   ...OTHER_MORE,
   ...OFFENSE_TEAM_SETS,
   ...DEFENSE_TEAM_SETS,
@@ -516,6 +568,7 @@ export const EDITABLE_EVENTS: EventDef[] = [
  * Contact) only expose their primary type here — the extra fields aren't
  * editable through this generic modal. */
 export const TYPE_OPTIONS_BY_EVENT: Record<string, TypeOption[] | undefined> = {
+  boxout: BOXOUT_TYPES,
   turnover: TURNOVER_TYPES,
   off_foul: OFF_FOUL_TYPES,
   def_foul: DEF_FOUL_TYPES,
@@ -524,6 +577,7 @@ export const TYPE_OPTIONS_BY_EVENT: Record<string, TypeOption[] | undefined> = {
   hustle_play: HUSTLE_PLAY_TYPES,
   man_to_man: MAN_TO_MAN_TYPES,
   zone: ZONE_TYPES,
+  press: PRESS_TYPES,
   physical_contact: PHYSICAL_CONTACT_TYPES,
   other_assist: ASSIST_TYPES,
   off_action: OFFENSE_ACTION_TYPES,

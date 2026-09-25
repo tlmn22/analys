@@ -5,23 +5,30 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { ShieldIcon, UsersIcon, CalendarIcon } from "lucide-react";
+import { ShieldIcon, UsersIcon, CalendarIcon, Building2Icon, IdCardIcon, CalendarCheckIcon } from "lucide-react";
 
 export default async function DashboardPage() {
   const db = supabaseAdmin();
-  const [teams, players, seasons] = await Promise.all([
+  const [teams, clubs, clubStaff, clubEvents, players, seasons] = await Promise.all([
     db.from("teams").select("*", { count: "exact", head: true }),
+    db.from("clubs").select("*", { count: "exact", head: true }),
+    db.from("club_staff").select("*", { count: "exact", head: true }),
+    db.from("club_events").select("*", { count: "exact", head: true }),
     db.from("players").select("*", { count: "exact", head: true }),
     db.from("seasons").select("*", { count: "exact", head: true }),
   ]);
 
-  const queryError = teams.error || players.error || seasons.error;
+  const queryError =
+    teams.error || clubs.error || clubStaff.error || clubEvents.error || players.error || seasons.error;
   if (queryError) {
     return <p className="text-sm text-destructive">Алдаа: {queryError.message}</p>;
   }
 
   const stats = [
     { label: "Багууд", value: teams.count ?? 0, icon: ShieldIcon },
+    { label: "Клубууд", value: clubs.count ?? 0, icon: Building2Icon },
+    { label: "Клубын ажилтнууд", value: clubStaff.count ?? 0, icon: IdCardIcon },
+    { label: "Клубын эвентүүд", value: clubEvents.count ?? 0, icon: CalendarCheckIcon },
     { label: "Тоглогчид", value: players.count ?? 0, icon: UsersIcon },
     { label: "Улирлууд", value: seasons.count ?? 0, icon: CalendarIcon },
   ];
@@ -34,7 +41,7 @@ export default async function DashboardPage() {
           Basketball analytic system — Phase 1
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {stats.map((stat) => (
           <Card key={stat.label}>
             <CardHeader className="flex flex-row items-center justify-between gap-4">

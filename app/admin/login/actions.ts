@@ -2,7 +2,9 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { createSessionToken, createStaffSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase/server";
+import { verifyPassword } from "@/lib/password";
 
 export type LoginState = { error?: string };
 
@@ -11,18 +13,31 @@ export async function login(
   formData: FormData
 ): Promise<LoginState> {
   const password = formData.get("password");
+  const email = String(formData.get("email") || "").trim().toLowerCase();
 
   if (typeof password !== "string" || password.length === 0) {
     return { error: "Нууц үгээ оруулна уу" };
   }
-  if (!process.env.ADMIN_PASSWORD) {
-    return { error: "Серверт ADMIN_PASSWORD тохируулагдаагүй байна" };
+  let token: string;
+  if (email) {
+    const { data: staff, error } = await supabaseAdmin().from("club_staff")
+      .select("id, role, password_hash").eq("email", email).maybeSingle();
+    if (error || !staff || !(await verifyPassword(password, staff.password_hash))) {
+      return { error: "Email эсвэл нууц үг буруу байна" };
+    }
+    if (!["owner", "manager", "head_coach", "assistant_coach"].includes(staff.role)) {
+      return { error: "Тоглогч ирц, эвентийн тайлбар засах эрхгүй." };
+    }
+    token = await createStaffSessionToken(staff.id);
+  } else {
+    if (!process.env.ADMIN_PASSWORD) {
+      return { error: "Серверт ADMIN_PASSWORD тохируулагдаагүй байна" };
+    }
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return { error: "Нууц үг буруу байна" };
+    }
+    token = await createSessionToken();
   }
-  if (password !== process.env.ADMIN_PASSWORD) {
-    return { error: "Нууц үг буруу байна" };
-  }
-
-  const token = await createSessionToken();
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
@@ -32,5 +47,5 @@ export async function login(
     maxAge: 60 * 60 * 24 * 7,
   });
 
-  redirect("/admin");
+  redirect(email ? "/admin/club-events" : "/admin");
 }

@@ -20,6 +20,7 @@ export function ShotDetailPanel({
   isMade,
   onCancel,
   onDone,
+  initial,
 }: {
   title: string;
   roster: RosterPlayer[];
@@ -29,6 +30,7 @@ export function ShotDetailPanel({
    * Assisted? stage entirely and go straight from location to defender. */
   isMade: boolean;
   onCancel: () => void;
+  initial?: { player: RosterPlayer; details: ShotDetails; assistPlayer: RosterPlayer | null };
   onDone: (
     player: RosterPlayer,
     details: ShotDetails,
@@ -36,14 +38,16 @@ export function ShotDetailPanel({
     assistPlayer: RosterPlayer | null
   ) => void;
 }) {
-  const [stage, setStage] = useState<Stage>("player");
-  const [player, setPlayer] = useState<RosterPlayer | null>(null);
-  const [modifiers, setModifiers] = useState<Record<string, boolean>>(emptyModifiers());
-  const [shotQuality, setShotQuality] = useState("");
-  const [shotType, setShotType] = useState<string | null>(null);
-  const [shotX, setShotX] = useState<number | null>(null);
-  const [shotY, setShotY] = useState<number | null>(null);
-  const [assistPlayer, setAssistPlayer] = useState<RosterPlayer | null>(null);
+  const [stage, setStage] = useState<Stage>(initial ? "detail" : "player");
+  const [player, setPlayer] = useState<RosterPlayer | null>(initial?.player ?? null);
+  const [modifiers, setModifiers] = useState<Record<string, boolean>>(() => Object.fromEntries(
+    Object.keys(emptyModifiers()).map(key => [key, Boolean(initial?.details[key as keyof ShotDetails])])
+  ));
+  const [shotQuality, setShotQuality] = useState(String(initial?.details.shotQuality ?? ""));
+  const [shotType, setShotType] = useState<string | null>(initial?.details.shotType ?? null);
+  const [shotX, setShotX] = useState<number | null>(initial?.details.shotX ?? null);
+  const [shotY, setShotY] = useState<number | null>(initial?.details.shotY ?? null);
+  const [assistPlayer, setAssistPlayer] = useState<RosterPlayer | null>(initial?.assistPlayer ?? null);
 
   function pickPlayer(p: RosterPlayer) {
     setPlayer(p);
@@ -83,8 +87,8 @@ export function ShotDetailPanel({
     onDone(
       player as RosterPlayer,
       {
-        andOne: !!modifiers.andOne,
-        badMiss: !!modifiers.badMiss,
+        andOne: isMade && !!modifiers.andOne,
+        badMiss: !isMade && !!modifiers.badMiss,
         contestedClose: !!modifiers.contestedClose,
         lateClock: !!modifiers.lateClock,
         lightlyContested: !!modifiers.lightlyContested,
@@ -105,7 +109,7 @@ export function ShotDetailPanel({
     else if (stage === "assist_player") setStage("assisted");
     else if (stage === "assisted") setStage("location");
     else if (stage === "location") setStage("detail");
-    else if (stage === "detail") setStage("player");
+    else if (stage === "detail") { if (initial) onCancel(); else setStage("player"); }
     else onCancel();
   }
 
@@ -125,7 +129,7 @@ export function ShotDetailPanel({
           )}
           <div className="flex flex-col gap-1.5">
             {roster.map((p) => (
-              <Button key={p.playerId} variant="outline" onClick={() => pickPlayer(p)}>
+              <Button key={p.playerId} variant="outline" className="justify-start" onClick={() => pickPlayer(p)}>
                 {playerLabel(p)}
               </Button>
             ))}
@@ -221,7 +225,7 @@ export function ShotDetailPanel({
             {roster
               .filter((p) => p.playerId !== player.playerId)
               .map((p) => (
-                <Button key={p.playerId} variant="outline" onClick={() => pickAssistPlayer(p)}>
+                <Button key={p.playerId} variant="outline" className="justify-start" onClick={() => pickAssistPlayer(p)}>
                   {playerLabel(p)}
                 </Button>
               ))}
@@ -239,7 +243,7 @@ export function ShotDetailPanel({
           )}
           <div className="flex flex-col gap-1.5">
             {defenderRoster.map((p) => (
-              <Button key={p.playerId} variant="outline" onClick={() => finish(p)}>
+              <Button key={p.playerId} variant="outline" className="justify-start" onClick={() => finish(p)}>
                 {playerLabel(p)}
               </Button>
             ))}

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireSuperadmin } from "@/lib/club-event-access";
+
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import type { GameType } from "@/lib/types";
@@ -23,6 +25,7 @@ export async function addTeamToSeason(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
+  await requireSuperadmin();
   const team_id = String(formData.get("team_id") || "");
   if (!team_id) return { error: "Баг сонгоно уу" };
 
@@ -37,6 +40,7 @@ export async function addTeamToSeason(
 }
 
 export async function removeTeamFromSeason(seasonTeamId: string, seasonId: string) {
+  await requireSuperadmin();
   await supabaseAdmin().from("season_teams").delete().eq("id", seasonTeamId);
   revalidatePath(`/admin/seasons/${seasonId}`);
 }
@@ -49,6 +53,7 @@ export async function addPlayerToRoster(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
+  await requireSuperadmin();
   const player_id = String(formData.get("player_id") || "");
   const number = Number(formData.get("number"));
 
@@ -67,7 +72,32 @@ export async function addPlayerToRoster(
   return { success: true };
 }
 
+export async function addPlayersToRoster(
+  seasonTeamId: string,
+  seasonId: string,
+  entries: { player_id: string; number: number }[]
+): Promise<ActionState> {
+  await requireSuperadmin();
+  if (entries.length === 0) return { error: "Тоглогч сонгоно уу" };
+  for (const entry of entries) {
+    if (!entry.player_id) return { error: "Тоглогч сонгоно уу" };
+    if (!Number.isInteger(entry.number) || entry.number < 0) {
+      return { error: "Дугаар зөв тоо байх ёстой" };
+    }
+  }
+
+  const { error } = await supabaseAdmin()
+    .from("rosters")
+    .insert(entries.map((e) => ({ season_team_id: seasonTeamId, ...e })));
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/seasons/${seasonId}`);
+  return { success: true };
+}
+
 export async function removeFromRoster(rosterId: string, seasonId: string) {
+  await requireSuperadmin();
   await supabaseAdmin().from("rosters").delete().eq("id", rosterId);
   revalidatePath(`/admin/seasons/${seasonId}`);
 }
@@ -111,6 +141,7 @@ export async function createGame(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
+  await requireSuperadmin();
   const parsed = parseGameInput(formData);
   if ("error" in parsed) return { error: parsed.error };
 
@@ -130,6 +161,7 @@ export async function updateGame(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
+  await requireSuperadmin();
   const parsed = parseGameInput(formData);
   if ("error" in parsed) return { error: parsed.error };
 
@@ -141,6 +173,7 @@ export async function updateGame(
 }
 
 export async function deleteGame(id: string, seasonId: string) {
+  await requireSuperadmin();
   await supabaseAdmin().from("games").delete().eq("id", id);
   revalidatePath(`/admin/seasons/${seasonId}`);
 }

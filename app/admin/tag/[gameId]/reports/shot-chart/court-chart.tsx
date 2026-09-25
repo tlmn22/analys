@@ -15,6 +15,9 @@ export interface ChartDot {
   y: number; // normalized shot_y from tagging (0-1)
   color: string;
   radius: number;
+  /** Made shots draw as a filled circle, misses as an X — a circle for
+   * both was hard to tell apart at a glance even with the color coding. */
+  made: boolean;
   onClick?: () => void;
 }
 
@@ -59,7 +62,7 @@ export function ShotCourtChart({
 
   function handleMouseDown(e: MouseEvent<SVGSVGElement>) {
     if (!onSelectionChange) return;
-    if ((e.target as SVGElement).tagName === "circle") return; // let dot clicks through
+    if ((e.target as SVGElement).closest("[data-shot-dot]")) return; // let dot clicks through
     const p = svgPoint(e);
     setDrag({ startX: p.x, startY: p.y, curX: p.x, curY: p.y });
   }
@@ -155,19 +158,59 @@ export function ShotCourtChart({
         />
       )}
 
-      {dots.map((d) => (
-        <circle
-          key={d.key}
-          cx={d.y * WIDTH}
-          cy={d.x * HEIGHT}
-          r={d.radius}
-          fill={d.color}
-          stroke="#00000055"
-          strokeWidth={0.75}
-          onClick={d.onClick}
-          className={d.onClick ? "cursor-pointer" : undefined}
-        />
-      ))}
+      {dots.map((d) => {
+        const cx = d.y * WIDTH;
+        const cy = d.x * HEIGHT;
+        if (d.made) {
+          return (
+            <circle
+              key={d.key}
+              data-shot-dot
+              cx={cx}
+              cy={cy}
+              r={d.radius}
+              fill={d.color}
+              stroke="#00000055"
+              strokeWidth={0.75}
+              onClick={d.onClick}
+              className={d.onClick ? "cursor-pointer" : undefined}
+            />
+          );
+        }
+        // Missed shots: an X, made from two crossing lines over an
+        // invisible hit-circle (fill="transparent" still captures clicks)
+        // so the click target stays the same size as a made shot's dot.
+        const arm = d.radius * 0.8;
+        const strokeWidth = Math.max(1.5, d.radius * 0.5);
+        return (
+          <g
+            key={d.key}
+            data-shot-dot
+            onClick={d.onClick}
+            className={d.onClick ? "cursor-pointer" : undefined}
+          >
+            <circle cx={cx} cy={cy} r={d.radius} fill="transparent" />
+            <line
+              x1={cx - arm}
+              y1={cy - arm}
+              x2={cx + arm}
+              y2={cy + arm}
+              stroke={d.color}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+            />
+            <line
+              x1={cx - arm}
+              y1={cy + arm}
+              x2={cx + arm}
+              y2={cy - arm}
+              stroke={d.color}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+            />
+          </g>
+        );
+      })}
     </svg>
   );
 }

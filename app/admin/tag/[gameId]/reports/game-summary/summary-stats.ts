@@ -41,10 +41,23 @@ export interface RawEvent {
   screenSetType?: string | null;
   screenRcvdType?: string | null;
   screenerPlayerId?: string | null;
+  screenTargetPlayerId?: string | null;
   offActionType?: string | null;
   defCoverageType?: string | null;
   defOffballType?: string | null;
   defenderPlayerId?: string | null;
+  manToManType?: string | null;
+  zoneType?: string | null;
+  pressType?: string | null;
+  contestedClose?: boolean;
+  lightlyContested?: boolean;
+  uncontested?: boolean;
+  wideOpen?: boolean;
+  foulType?: string | null;
+  foulFiftyFifty?: boolean;
+  foulBadCall?: boolean;
+  foulCorrectCall?: boolean;
+  setOffenseName?: string | null;
 }
 
 export interface PeriodTotal {

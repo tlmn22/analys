@@ -1,5 +1,7 @@
 "use server";
 
+import { requireSuperadmin } from "@/lib/club-event-access";
+
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { uploadImage } from "@/lib/storage";
@@ -33,6 +35,7 @@ export async function createPlayer(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
+  await requireSuperadmin();
   const parsed = parsePlayerInput(formData);
   if ("error" in parsed) return { error: parsed.error };
 
@@ -62,6 +65,7 @@ export async function updatePlayer(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
+  await requireSuperadmin();
   const parsed = parsePlayerInput(formData);
   if ("error" in parsed) return { error: parsed.error };
 
@@ -84,6 +88,7 @@ export async function updatePlayer(
 }
 
 export async function deletePlayer(id: string) {
+  await requireSuperadmin();
   await supabaseAdmin().from("players").delete().eq("id", id);
   revalidatePath("/admin/players");
   revalidatePath("/admin");

@@ -27,9 +27,9 @@ export function ActionPanel({
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || target.closest("input, textarea, select, [contenteditable=true], [role=dialog]")) return;
       const events = live
-        ? [...OFFENSE, ...DEFENSE, ...OFFENSE_TEAM_SETS, ...DEFENSE_TEAM_SETS]
+        ? [...OFFENSE, ...DEFENSE, ...OTHER, ...OFFENSE_TEAM_SETS, ...DEFENSE_TEAM_SETS]
         : STOPPED;
       const match = events.find((ev) => ev.key !== "" && ev.key === e.key);
       if (match) {

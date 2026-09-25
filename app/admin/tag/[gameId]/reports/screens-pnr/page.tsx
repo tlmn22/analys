@@ -26,7 +26,7 @@ export default async function ScreensPnrPage({
     db
       .from("game_events")
       .select(
-        "id, video_time, period, clock_time, event_type, team_id, player_id, points, screen_set_type, screener_player_id, screen_rcvd_type, off_action_type, def_coverage_type, def_offball_type"
+        "id, video_time, period, clock_time, event_type, team_id, player_id, points, screen_set_type, screen_target_player_id, screener_player_id, screen_rcvd_type, off_action_type, def_coverage_type, def_offball_type"
       )
       .eq("game_id", gameId),
     db
@@ -85,6 +85,7 @@ export default async function ScreensPnrPage({
     shotY: null,
     andOne: false,
     screenSetType: e.screen_set_type as string | null,
+    screenTargetPlayerId: e.screen_target_player_id as string | null,
     screenerPlayerId: e.screener_player_id as string | null,
     screenRcvdType: e.screen_rcvd_type as string | null,
     offActionType: e.off_action_type as string | null,

@@ -88,7 +88,7 @@ export default async function PlayerLineupStatsPage({
 
   return (
     <div className="min-h-screen bg-background p-6 text-foreground">
-      <div className="mx-auto max-w-[1400px]">
+      <div className="mx-auto max-w-[1600px]">
         <Link href={`/admin/tag/${gameId}`} className="text-sm text-blue-500 hover:underline">
           ← Tag руу буцах
         </Link>

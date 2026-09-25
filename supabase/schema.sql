@@ -10,6 +10,9 @@ create type game_type as enum (
   'league', 'division', 'non_conference', 'tournament',
   'playoff', 'pre_season', 'scrimmage'
 );
+create type club_staff_role as enum ('owner', 'manager', 'head_coach', 'assistant_coach', 'player');
+create type club_event_type as enum ('gym_prep', 'fitness_prep', 'team_meeting', 'other');
+create type attendance_status as enum ('present', 'absent', 'late', 'excused', 'sick');
 
 create table teams (
   id uuid primary key default gen_random_uuid(),
@@ -17,6 +20,61 @@ create table teams (
   logo_url text,
   gender text not null check (gender in ('male', 'female')),
   created_at timestamptz not null default now()
+);
+
+-- Standalone club registry (organization/sponsor info) — independent of
+-- teams for now, not linked via a foreign key.
+create table clubs (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  logo_url text,
+  sponsor_name text,
+  sponsor_logo_url text,
+  created_at timestamptz not null default now()
+);
+
+-- A club's people (owner/manager/head coach/assistant coach/player) —
+-- Non-player members can log in to edit their own club's event attendance
+-- and descriptions. Player accounts are attendance subjects, not editors.
+-- password_hash is a salted scrypt hash (see lib/password.ts), never a
+-- plaintext password. The "player" role here is a lightweight, unverified
+-- account distinct from the `players` table used for game tagging/rosters
+-- — no link between the two.
+create table club_staff (
+  id uuid primary key default gen_random_uuid(),
+  club_id uuid not null references clubs(id) on delete cascade,
+  first_name text not null,
+  last_name text not null,
+  email text not null unique,
+  password_hash text not null,
+  role club_staff_role not null,
+  created_at timestamptz not null default now()
+);
+
+-- Club-organized events (gym prep / fitness prep / team meetings / other) —
+-- Attendance includes all club_staff members, including players. Editing
+-- is restricted to the superadmin or non-player staff of the event's club.
+-- Game-tagging `players` remain separate from club member accounts.
+create table club_events (
+  id uuid primary key default gen_random_uuid(),
+  club_id uuid not null references clubs(id) on delete cascade,
+  name text not null,
+  event_type club_event_type not null,
+  location text,
+  start_at timestamptz not null,
+  end_at timestamptz not null,
+  description text,
+  created_at timestamptz not null default now()
+);
+
+create table club_event_attendance (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references club_events(id) on delete cascade,
+  club_staff_id uuid not null references club_staff(id) on delete cascade,
+  status attendance_status not null default 'absent',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (event_id, club_staff_id)
 );
 
 create table seasons (
@@ -80,6 +138,7 @@ create table game_events (
   clock_time numeric not null,   -- seconds remaining in the period (game clock)
   video_time numeric not null,   -- YouTube position in seconds (for seeking back)
   event_type text not null,      -- '2pt_made', 'turnover', 'sub', ...
+  decision_quality text check (decision_quality in ('good', 'bad')),
   team_id uuid references teams(id),
   player_id uuid references players(id),
   assist_player_id uuid references players(id),
@@ -110,6 +169,7 @@ create table game_events (
   foul_correct_call boolean not null default false,
   -- Screen Set detail:
   screen_set_type text,
+  screen_target_player_id uuid references players(id),
   -- Screen Received detail:
   screener_player_id uuid references players(id),
   screen_rcvd_type text,
@@ -124,9 +184,10 @@ create table game_events (
   blob_outcome text,
   slob_play_name text,
   slob_outcome text,
-  -- Man to Man / Zone detail (team-level, no player):
+  -- Man to Man / Zone / Press detail (team-level, no player):
   man_to_man_type text,
   zone_type text,
+  press_type text,
   -- Named offensive actions / defensive coverage calls (team-level, no
   -- player):
   off_action_type text,
@@ -136,6 +197,8 @@ create table game_events (
   physical_contact_type text,
   physical_contact_second_player_id uuid references players(id),
   physical_contact_winner_player_id uuid references players(id),
+  -- Boxout detail (Good/Bad call quality, either team):
+  boxout_type text,
   -- Marks a game-turning moment, set only via editing an already-tagged
   -- event — the analyst's own judgment call, not derived from anything:
   key_event boolean not null default false,

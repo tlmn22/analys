@@ -80,7 +80,7 @@ export default async function TagPage({
     );
   }
 
-  const [teamsRes, seasonTeamsRes, lineupRes, eventsRes, offenseSetsRes] = await Promise.all([
+  const [teamsRes, seasonTeamsRes, lineupRes, eventsRes, offenseSetsRes, decisionRes] = await Promise.all([
     db
       .from("teams")
       .select("id, name")
@@ -99,6 +99,7 @@ export default async function TagPage({
       .eq("game_id", gameId)
       .order("created_at", { ascending: false }),
     db.from("game_offense_sets").select("category, name").eq("game_id", gameId).order("created_at"),
+    db.from("game_events").select("decision_quality").limit(0),
   ]);
 
   const teamsById = new Map((teamsRes.data ?? []).map((t) => [t.id, t]));
@@ -171,6 +172,7 @@ export default async function TagPage({
     clockTime: Number(e.clock_time),
     videoTime: Number(e.video_time),
     eventType: e.event_type,
+    decisionQuality: e.decision_quality ?? null,
     label: LABEL_BY_TYPE.get(e.event_type) ?? e.event_type,
     color: COLOR_BY_TYPE.get(e.event_type) ?? "gray",
     teamId: e.team_id,
@@ -180,6 +182,13 @@ export default async function TagPage({
     points: e.points,
     keyEvent: !!e.key_event,
     shotType: e.shot_type,
+    assistPlayerId: e.assist_player_id,
+    shotDetails: /^(2pt|3pt)_(made|miss)$/.test(e.event_type) ? {
+      shotType: e.shot_type ?? "", shotX: e.shot_x == null ? null : Number(e.shot_x), shotY: e.shot_y == null ? null : Number(e.shot_y),
+      shotQuality: e.shot_quality, andOne: !!e.and_one, badMiss: !!e.bad_miss,
+      contestedClose: !!e.contested_close, lateClock: !!e.late_clock, lightlyContested: !!e.lightly_contested,
+      uncontested: !!e.uncontested, wideOpen: !!e.wide_open,
+    } : undefined,
     defenderLabel: playerLabelFor(e.defender_player_id),
     assistType: e.assist_type,
     turnoverType: e.turnover_type,
@@ -187,6 +196,7 @@ export default async function TagPage({
     screenSetType: e.screen_set_type,
     screenRcvdType: e.screen_rcvd_type,
     screenerLabel: playerLabelFor(e.screener_player_id),
+    screenTargetLabel: playerLabelFor(e.screen_target_player_id),
     hustlePlayType: e.hustle_play_type,
     setOffenseName: e.set_offense_name,
     blobPlayName: e.blob_play_name,
@@ -195,6 +205,7 @@ export default async function TagPage({
     slobOutcome: e.slob_outcome,
     manToManType: e.man_to_man_type,
     zoneType: e.zone_type,
+    pressType: e.press_type,
     offActionType: e.off_action_type,
     defCoverageType: e.def_coverage_type,
     defOffballType: e.def_offball_type,
@@ -218,8 +229,9 @@ export default async function TagPage({
   // this only looks at that single event, so it stays correct even though
   // past manual Off/Def swaps aren't recorded anywhere to replay.
   const mostRecentEvent = initialEvents[0];
-  const initialPeriod = mostRecentEvent?.period ?? 1;
-  const initialClockTime = mostRecentEvent?.clockTime ?? 600;
+  const endedQuarter = mostRecentEvent?.eventType === "end_quarter";
+  const initialPeriod = (mostRecentEvent?.period ?? 1) + (endedQuarter ? 1 : 0);
+  const initialClockTime = endedQuarter ? 600 : mostRecentEvent?.clockTime ?? 600;
   const initialVideoTime = mostRecentEvent?.videoTime ?? 0;
 
   let initialOffTeamId = homeTeam.id;
@@ -228,7 +240,7 @@ export default async function TagPage({
     const side = SIDE_BY_TYPE.get(sideEvent.eventType)!;
     const teamAtEvent = sideEvent.teamId!;
     const otherTeam = teamAtEvent === homeTeam.id ? visitorTeam.id : homeTeam.id;
-    const flips = AUTO_FLIP_TYPES.has(sideEvent.eventType);
+    const flips = AUTO_FLIP_TYPES.has(sideEvent.eventType) && !sideEvent.shotDetails?.andOne;
     if (side === "off") {
       initialOffTeamId = flips ? otherTeam : teamAtEvent;
     } else {
@@ -247,6 +259,7 @@ export default async function TagPage({
       initialEvents={initialEvents}
       initialPlayNames={initialPlayNames}
       initialPeriod={initialPeriod}
+      decisionEnabled={!decisionRes.error}
       initialClockTime={initialClockTime}
       initialVideoTime={initialVideoTime}
       initialOffTeamId={initialOffTeamId}

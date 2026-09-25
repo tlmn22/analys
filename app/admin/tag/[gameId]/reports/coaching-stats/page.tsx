@@ -20,7 +20,9 @@ export default async function CoachingStatsPage({
 
   const { data: eventsRes } = await supabaseAdmin()
     .from("game_events")
-    .select("id, video_time, period, clock_time, event_type, team_id, points, and_one")
+    .select(
+      "id, video_time, period, clock_time, event_type, team_id, points, and_one, man_to_man_type, zone_type, press_type"
+    )
     .eq("game_id", gameId);
 
   const rows = eventsRes ?? [];
@@ -40,11 +42,14 @@ export default async function CoachingStatsPage({
     shotX: null,
     shotY: null,
     andOne: !!e.and_one,
+    manToManType: e.man_to_man_type as string | null,
+    zoneType: e.zone_type as string | null,
+    pressType: e.press_type as string | null,
   }));
 
   return (
     <div className="min-h-screen bg-background p-6 text-foreground">
-      <div className="mx-auto max-w-[1500px]">
+      <div className="mx-auto max-w-[1600px]">
         <Link href={`/admin/tag/${gameId}`} className="text-sm text-blue-500 hover:underline">
           ← Tag руу буцах
         </Link>

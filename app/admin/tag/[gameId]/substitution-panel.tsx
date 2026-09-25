@@ -79,6 +79,7 @@ export function SubstitutionPanel({
             <Button
               key={i}
               variant="outline"
+              className="justify-start"
               onClick={() => setStage({ kind: "slot", teamId: team.id, slot: i + 1 })}
             >
               {p ? playerLabel(p) : "?"}
@@ -129,7 +130,7 @@ function PickFiveView({
               key={p.playerId}
               variant="outline"
               disabled={picked || saving}
-              className={picked ? "bg-emerald-600 text-white opacity-100" : ""}
+              className={picked ? "justify-start bg-emerald-600 text-white opacity-100" : "justify-start"}
               onClick={() => tap(p)}
             >
               {playerLabel(p)}
@@ -169,7 +170,7 @@ function SlotPickerView({
       ) : (
         <div className="flex flex-col gap-1.5">
           {bench.map((p) => (
-            <Button key={p.playerId} variant="outline" disabled={saving} onClick={() => pick(p)}>
+            <Button key={p.playerId} variant="outline" className="justify-start" disabled={saving} onClick={() => pick(p)}>
               {playerLabel(p)}
             </Button>
           ))}

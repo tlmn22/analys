@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { AUTO_FLIP_TYPES, OTHER_MORE, type EventDef } from "@/lib/tag-events";
-import { addPlayName, tagEvent, setLineupBulk, setLineupSlot, updateEvent, deleteEvent } from "./actions";
+import { AUTO_FLIP_TYPES, OTHER_MORE, EDITABLE_EVENTS, type EventDef } from "@/lib/tag-events";
+import { addPlayName, tagEvent, restoreLineup, undoTagEvents, updateEvent, deleteEvent } from "./actions";
 import { ActionPanel } from "./action-panel";
 import { EditEventModal, type UpdateEventFields } from "./edit-event-modal";
 import { EventsPanel } from "./events-panel";
@@ -17,8 +17,14 @@ import { TeamPickerPanel } from "./team-picker-panel";
 import { TypeDetailPanel } from "./type-detail-panel";
 import { playerLabel, type RosterPlayer, type ShotDetails, type TaggedEvent, type TeamInfo } from "./types";
 import { VideoPanel, type VideoPanelHandle } from "./video-panel";
+import { eventDetailCleanup } from "./event-detail-cleanup";
+import { normalizeDecisionQuality, supportsDecisionQuality, type DecisionQuality } from "@/lib/decision-quality";
+import { DecisionQualityPicker } from "./decision-quality-picker";
 
 type Lineup = Record<string, (RosterPlayer | null)[]>;
+const emptyShot = (): ShotDetails => ({ andOne: false, badMiss: false, contestedClose: false, lateClock: false, lightlyContested: false, uncontested: false, wideOpen: false, shotQuality: null, shotType: "", shotX: null, shotY: null });
+type Capture = { clockTime: number; videoTime: number; playing: boolean };
+type UndoEntry = { ids: string[]; lineup: Lineup; period: number; off: string; def: string; live: boolean; capture: Capture; lineupTeam?: string; followUp: "rebound" | "ft" | null };
 
 export function TagWorkspace({
   gameId,
@@ -33,6 +39,7 @@ export function TagWorkspace({
   initialVideoTime,
   initialOffTeamId,
   initialDefTeamId,
+  decisionEnabled = false,
 }: {
   gameId: string;
   videoUrl: string;
@@ -46,6 +53,7 @@ export function TagWorkspace({
   initialVideoTime: number;
   initialOffTeamId: string;
   initialDefTeamId: string;
+  decisionEnabled?: boolean;
 }) {
   const teams = useMemo(() => [homeTeam, visitorTeam], [homeTeam, visitorTeam]);
   const rosterByPlayerId = useMemo(() => {
@@ -67,13 +75,13 @@ export function TagWorkspace({
   const [defTeamId, setDefTeamId] = useState(initialDefTeamId);
   const [lineup, setLineup] = useState<Lineup>(initialLineup);
   const [events, setEvents] = useState<TaggedEvent[]>(initialEvents);
-  const [scores, setScores] = useState<Record<string, number>>(() => {
+  const scores = useMemo(() => {
     const s: Record<string, number> = { [homeTeam.id]: 0, [visitorTeam.id]: 0 };
-    for (const e of initialEvents) {
+    for (const e of events) {
       if (e.points && e.teamId) s[e.teamId] = (s[e.teamId] ?? 0) + e.points;
     }
     return s;
-  });
+  }, [events, homeTeam.id, visitorTeam.id]);
 
   const [pickerState, setPickerState] = useState<{ event: EventDef } | null>(null);
   const [shotModalState, setShotModalState] = useState<{ event: EventDef; teamId: string } | null>(
@@ -86,15 +94,97 @@ export function TagWorkspace({
   const [playNameModalState, setPlayNameModalState] = useState<{ event: EventDef } | null>(null);
   const [editingEvent, setEditingEvent] = useState<TaggedEvent | null>(null);
   const [playNames, setPlayNames] = useState<Record<string, string[]>>(initialPlayNames);
+  const [selectedPlayer, setSelectedPlayer] = useState<RosterPlayer | null>(null);
+  const [benchSlot, setBenchSlot] = useState<{ teamId: string; slot: number } | null>(null);
+  const [subMode, setSubMode] = useState(false);
+  const [status, setStatus] = useState("Бэлэн");
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [history, setHistory] = useState<UndoEntry[]>([]);
+  const [followUp, setFollowUp] = useState<"rebound" | "ft" | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  const [decisionQuality, setDecisionQuality] = useState<DecisionQuality>(null);
+  const activePlayerEvent = shotModalState?.event ?? typeModalState?.event ?? pickerState?.event;
+  const captureRef = useRef<Capture | null>(null);
+  const busyRef = useRef(false);
+  const retryRef = useRef<(() => Promise<void>) | null>(null);
+  const operationRef = useRef<UndoEntry | null>(null);
+  const eventIndexRef = useRef(0);
+  const blocked = saving || failed;
+  useEffect(() => {
+    if (!blocked) return;
+    const preventLoss = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", preventLoss);
+    return () => window.removeEventListener("beforeunload", preventLoss);
+  }, [blocked]);
+
+  function capture() {
+    if (!captureRef.current) {
+      if (!videoRef.current?.isReady()) { setStatus("Видео бэлэн болохыг хүлээнэ үү."); return false; }
+      captureRef.current = { ...videoRef.current.getSnapshot(), playing: videoRef.current.isPlaying() };
+      setCapturing(true);
+      videoRef.current.pause();
+    }
+    return true;
+  }
+  function closePanels() {
+    setPickerState(null); setShotModalState(null); setTypeModalState(null); setTeamPickerState(null);
+    setPlayNameModalState(null); setSubOpen(false); setBenchSlot(null);
+  }
+  function finishCapture() {
+    const captured = captureRef.current;
+    captureRef.current = null;
+    setCapturing(false);
+    closePanels();
+    setDecisionQuality(null);
+    if (captured?.playing) videoRef.current?.play();
+  }
+  function cancelCapture() { if (!busyRef.current && !retryRef.current) finishCapture(); }
+
+  async function runOperation(work: () => Promise<void>, record = true, lineupTeam?: string) {
+    if (busyRef.current || retryRef.current) return;
+    if (!capture()) return;
+    const entry: UndoEntry = { ids: [], lineup, period, off: offTeamId, def: defTeamId, live, capture: { ...captureRef.current! }, lineupTeam, followUp };
+    const attempt = async () => {
+      if (busyRef.current) return;
+      busyRef.current = true; setSaving(true); setFailed(false); setStatus("Хадгалж байна…");
+      operationRef.current = entry; eventIndexRef.current = 0;
+      try {
+        await work();
+        if (record && entry.ids.length) setHistory(prev => [...prev, entry]);
+        retryRef.current = null; setStatus("Хадгаллаа"); finishCapture();
+      } catch (error) {
+        retryRef.current = attempt; setFailed(true);
+        setStatus(`Хадгалсангүй: ${error instanceof Error ? error.message : String(error)}`);
+      } finally { busyRef.current = false; operationRef.current = null; setSaving(false); }
+    };
+    await attempt();
+  }
+
+  async function undoLast() {
+    const entry = history.at(-1);
+    if (!entry) return;
+    await runOperation(async () => {
+      if (entry.lineupTeam) {
+        const res = await restoreLineup(gameId, entry.lineupTeam, (entry.lineup[entry.lineupTeam] ?? [null, null, null, null, null]).map(p => p?.playerId ?? null));
+        if (res.error) throw new Error(res.error);
+      }
+      const res = await undoTagEvents(gameId, entry.ids);
+      if (res.error) throw new Error(res.error);
+      setEvents(prev => prev.filter(e => !entry.ids.includes(e.id)));
+      setLineup(entry.lineup); setPeriod(entry.period); setOffTeamId(entry.off); setDefTeamId(entry.def); setLive(entry.live);
+      setFollowUp(entry.followUp); setHistory(prev => prev.slice(0, -1));
+      videoRef.current?.seekTo(entry.capture.videoTime); videoRef.current?.setClock(entry.capture.clockTime);
+      captureRef.current = { ...entry.capture, playing: false };
+    }, false);
+  }
 
   const team = (id: string) => teams.find((t) => t.id === id)!;
 
-  // Player pickers show only the 5 players currently on the floor for that
-  // team; if the lineup hasn't been set yet (no Substitution done), fall
-  // back to the full roster so tagging isn't blocked.
+  // Tagging is limited to the current on-court players; empty slots are visible above.
   function rosterForPicking(teamId: string): RosterPlayer[] {
     const onCourt = (lineup[teamId] ?? []).filter((p): p is RosterPlayer => p !== null);
-    return onCourt.length > 0 ? onCourt : team(teamId).roster;
+    return onCourt;
   }
 
   // Most events belong to whichever side is currently on offense/defense.
@@ -149,11 +239,9 @@ export function TagWorkspace({
       winner?: RosterPlayer | null;
     }
   ) {
-    // commit() is called fire-and-forget from onDone handlers (not
-    // awaited), so any throw here would otherwise become a silent unhandled
-    // rejection — the tag vanishes with no error shown. Catch everything
-    // and alert, matching this project's zero-silent-failure requirement.
-    try {
+    if (player && !["sub_in", "sub_out", "lineup_set"].includes(eventDef.type) && !rosterForPicking(teamId!).some(p => p.playerId === player.playerId)) {
+      throw new Error("Энэ тоглогч талбайн бүрэлдэхүүнд байхгүй байна.");
+    }
       // The type-detail panel is shared across events (turnover, off_foul,
       // screen_set, screen_rcvd, ...) but each stores its picked type in its
       // own column — map here, in the one place that knows both the event
@@ -163,6 +251,7 @@ export function TagWorkspace({
       let screenSetType: string | null = null;
       let screenRcvdType: string | null = null;
       let screenerPlayerId: string | null = null;
+      let screenTargetPlayerId: string | null = null;
       let hustlePlayType: string | null = null;
       let setOffenseName: string | null = null;
       let blobPlayName: string | null = null;
@@ -171,12 +260,14 @@ export function TagWorkspace({
       let slobOutcome: string | null = null;
       let manToManType: string | null = null;
       let zoneType: string | null = null;
+      let pressType: string | null = null;
       let offActionType: string | null = null;
       let defCoverageType: string | null = null;
       let defOffballType: string | null = null;
       let physicalContactType: string | null = null;
       let physicalContactSecondPlayerId: string | null = null;
       let physicalContactWinnerPlayerId: string | null = null;
+      let boxoutType: string | null = null;
       let foulDetails:
         | { type: string; fiftyFifty: boolean; badCall: boolean; correctCall: boolean }
         | undefined;
@@ -194,6 +285,7 @@ export function TagWorkspace({
           };
         } else if (eventDef.type === "screen_set") {
           screenSetType = typeDetailResult.type;
+          screenTargetPlayerId = typeDetailResult.secondPlayer?.playerId ?? null;
         } else if (eventDef.type === "screen_rcvd") {
           screenRcvdType = typeDetailResult.type;
           screenerPlayerId = typeDetailResult.secondPlayer?.playerId ?? null;
@@ -211,6 +303,8 @@ export function TagWorkspace({
           manToManType = typeDetailResult.type;
         } else if (eventDef.type === "zone") {
           zoneType = typeDetailResult.type;
+        } else if (eventDef.type === "press") {
+          pressType = typeDetailResult.type;
         } else if (eventDef.type === "off_action") {
           offActionType = typeDetailResult.type;
         } else if (eventDef.type === "def_coverage") {
@@ -221,22 +315,30 @@ export function TagWorkspace({
           physicalContactType = typeDetailResult.type;
           physicalContactSecondPlayerId = typeDetailResult.secondPlayer?.playerId ?? null;
           physicalContactWinnerPlayerId = typeDetailResult.winner?.playerId ?? null;
+        } else if (eventDef.type === "boxout") {
+          boxoutType = typeDetailResult.type;
         }
       }
 
-      const snapshot = videoRef.current?.getSnapshot() ?? { clockTime: 0, videoTime: 0 };
+      const snapshot = captureRef.current ?? videoRef.current!.getSnapshot();
+      const operation = operationRef.current;
+      const index = eventIndexRef.current++;
+      const id = operation ? (operation.ids[index] ??= crypto.randomUUID()) : crypto.randomUUID();
       const result = await tagEvent({
+        id,
         gameId,
         period,
         clockTime: snapshot.clockTime,
         videoTime: snapshot.videoTime,
         eventType: eventDef.type,
+        decisionQuality: decisionEnabled ? normalizeDecisionQuality(eventDef.type, player?.playerId ?? null, decisionQuality) : undefined,
         label: eventDef.label,
         teamId,
         playerId: player?.playerId ?? null,
         assistPlayerId: assistPlayer?.playerId ?? null,
         defenderPlayerId: defender?.playerId ?? null,
         screenerPlayerId,
+        screenTargetPlayerId,
         points: eventDef.points ?? null,
         shotDetails,
         assistType,
@@ -252,16 +354,17 @@ export function TagWorkspace({
         slobOutcome,
         manToManType,
         zoneType,
+        pressType,
         offActionType,
         defCoverageType,
         defOffballType,
         physicalContactType,
         physicalContactSecondPlayerId,
         physicalContactWinnerPlayerId,
+        boxoutType,
       });
       if ("error" in result) {
-        alert(`Алдаа: ${result.error}`);
-        return;
+        throw new Error(result.error);
       }
 
       const newEvent: TaggedEvent = {
@@ -270,6 +373,7 @@ export function TagWorkspace({
         clockTime: snapshot.clockTime,
         videoTime: snapshot.videoTime,
         eventType: eventDef.type,
+        decisionQuality: normalizeDecisionQuality(eventDef.type, player?.playerId ?? null, decisionQuality),
         label: eventDef.label,
         color: eventDef.color,
         teamId,
@@ -279,6 +383,8 @@ export function TagWorkspace({
         points: eventDef.points ?? null,
         keyEvent: false,
         shotType: shotDetails?.shotType || null,
+        shotDetails,
+        assistPlayerId: assistPlayer?.playerId ?? null,
         defenderLabel: defender ? playerLabel(defender) : null,
         assistType,
         turnoverType,
@@ -293,11 +399,16 @@ export function TagWorkspace({
         slobOutcome,
         manToManType,
         zoneType,
+        pressType,
         offActionType,
         defCoverageType,
         defOffballType,
         screenerLabel:
           eventDef.type === "screen_rcvd" && typeDetailResult?.secondPlayer
+            ? playerLabel(typeDetailResult.secondPlayer)
+            : null,
+        screenTargetLabel:
+          eventDef.type === "screen_set" && typeDetailResult?.secondPlayer
             ? playerLabel(typeDetailResult.secondPlayer)
             : null,
         physicalContactType,
@@ -306,14 +417,12 @@ export function TagWorkspace({
             ? playerLabel(typeDetailResult.secondPlayer)
             : null,
         physicalContactWinnerLabel: typeDetailResult?.winner ? playerLabel(typeDetailResult.winner) : null,
+        boxoutType,
       };
-      setEvents((prev) => [newEvent, ...prev]);
+      setEvents((prev) => [newEvent, ...prev.filter(e => e.id !== newEvent.id)]);
 
-      if (eventDef.points && teamId) {
-        setScores((prev) => ({ ...prev, [teamId]: (prev[teamId] ?? 0) + eventDef.points! }));
-      }
       if (eventDef.type === "end_quarter") {
-        setPeriod((p) => p + 1);
+        setPeriod(period + 1);
         videoRef.current?.resetClock();
       }
 
@@ -325,16 +434,18 @@ export function TagWorkspace({
       // possession rather than ending it. Jump-ball/held-ball situations
       // still need the manual Off/Def swap buttons — this only covers the
       // common case.
-      if (AUTO_FLIP_TYPES.has(eventDef.type)) {
-        swapOffDef();
+      if (AUTO_FLIP_TYPES.has(eventDef.type) && !shotDetails?.andOne) {
+        setOffTeamId(defTeamId); setDefTeamId(offTeamId);
       }
-    } catch (err) {
-      alert(`Алдаа: ${err instanceof Error ? err.message : String(err)}`);
-    }
+      if (shotDetails?.andOne) { setFollowUp("ft"); setLive(false); }
+      else if (/^(2pt|3pt)_miss$/.test(eventDef.type)) setFollowUp("rebound");
+      else if (["off_reb", "def_reb"].includes(eventDef.type)) setFollowUp(null);
   }
 
   function handleEventTriggered(eventDef: EventDef) {
+    if (busyRef.current || retryRef.current || editingEvent || !capture()) return;
     setMoreOtherOpen(false);
+    setDecisionQuality(null);
     if (eventDef.type === "sub") {
       setSubOpen(true);
       return;
@@ -356,13 +467,14 @@ export function TagWorkspace({
       return;
     }
     if (!eventDef.needsPlayer) {
-      commit(eventDef, teamIdForEvent(eventDef, null), null, null);
+      void runOperation(() => commit(eventDef, teamIdForEvent(eventDef, null), null, null));
       return;
     }
     setPickerState({ event: eventDef });
   }
 
   async function handlePickPlayName(eventDef: EventDef, name: string, outcome: string | null) {
+    await runOperation(async () => {
     const category = eventDef.playNameDetail!.category;
     const existing = playNames[category] ?? [];
     if (!existing.includes(name)) {
@@ -378,74 +490,40 @@ export function TagWorkspace({
       modifiers: {},
       outcome,
     });
-    setPlayNameModalState(null);
-  }
-
-  async function handleBulkSet(teamId: string, players: RosterPlayer[]) {
-    const res = await setLineupBulk(gameId, teamId, players.map((p) => p.playerId));
-    if (res.error) {
-      alert(`Алдаа: ${res.error}`);
-      return;
-    }
-    setLineup((prev) => ({ ...prev, [teamId]: players }));
-
-    // Log a timestamped "Starter" event per player so box-score MIN/+- can
-    // reconstruct on-court intervals from the very start of the lineup,
-    // not just from later substitutions.
-    const starterEvent: EventDef = {
-      key: "",
-      label: "Starter",
-      type: "lineup_set",
-      needsPlayer: false,
-      color: "gray",
-    };
-    for (const p of players) {
-      await commit(starterEvent, teamId, p, null);
-    }
-  }
-
-  async function handleSlotSet(teamId: string, slot: number, player: RosterPlayer) {
-    const res = await setLineupSlot(gameId, teamId, slot, player.playerId);
-    if (res.error) {
-      alert(`Алдаа: ${res.error}`);
-      return;
-    }
-    setLineup((prev) => {
-      const arr = [...(prev[teamId] ?? [null, null, null, null, null])];
-      arr[slot - 1] = player;
-      return { ...prev, [teamId]: arr };
     });
+  }
 
-    if (res.previousPlayerId) {
-      const outgoing = rosterByPlayerId.get(res.previousPlayerId);
-      // Direction-specific types (rather than one generic "sub") so the
-      // box-score computation can reconstruct on-court intervals; both
-      // still display as "Sub" in the event log.
-      const subOutEvent: EventDef = {
-        key: "",
-        label: "Sub",
-        type: "sub_out",
-        needsPlayer: false,
-        color: "gray",
-      };
-      const subInEvent: EventDef = {
-        key: "",
-        label: "Sub",
-        type: "sub_in",
-        needsPlayer: false,
-        color: "gray",
-      };
-      if (outgoing) await commit(subOutEvent, teamId, outgoing, null);
-      await commit(subInEvent, teamId, player, null);
-    }
+  async function changeLineup(teamId: string, players: (RosterPlayer | null)[]) {
+    await runOperation(async () => {
+      const before = lineup[teamId] ?? [null, null, null, null, null];
+      const incoming = players.filter((p): p is RosterPlayer => !!p);
+      if (new Set(incoming.map(p => p.playerId)).size !== incoming.length) throw new Error("Давхардсан тоглогч байна.");
+      for (const player of before) {
+        if (player && !incoming.some(p => p.playerId === player.playerId))
+          await commit({ key: "", label: "Sub out", type: "sub_out", needsPlayer: false, color: "gray" }, teamId, player, null);
+      }
+      for (const player of incoming) {
+        if (!before.some(p => p?.playerId === player.playerId))
+          await commit({ key: "", label: "Sub in", type: "sub_in", needsPlayer: false, color: "gray" }, teamId, player, null);
+      }
+      const res = await restoreLineup(gameId, teamId, players.map(p => p?.playerId ?? null));
+      if (res.error) throw new Error(res.error);
+      setLineup(prev => ({ ...prev, [teamId]: players })); setSelectedPlayer(null); setSubMode(false);
+    }, true, teamId);
+  }
+  async function handleBulkSet(teamId: string, players: RosterPlayer[]) { await changeLineup(teamId, players); }
+  async function handleSlotSet(teamId: string, slot: number, player: RosterPlayer) {
+    const next = [...(lineup[teamId] ?? [null, null, null, null, null])];
+    next[slot - 1] = player;
+    await changeLineup(teamId, next);
   }
 
   async function handleUpdateEvent(fields: UpdateEventFields) {
     if (!editingEvent) return;
+    await runOperation(async () => {
     const res = await updateEvent({ id: editingEvent.id, ...fields });
     if (res.error) {
-      alert(`Алдаа: ${res.error}`);
-      return;
+      throw new Error(res.error);
     }
     const player = fields.playerId ? rosterByPlayerId.get(fields.playerId) : null;
     setEvents((prev) =>
@@ -453,7 +531,14 @@ export function TagWorkspace({
         e.id === editingEvent.id
           ? {
               ...e,
+              ...eventDetailCleanup(fields.eventType).display,
+              shotDetails: /^(2pt|3pt)_(made|miss)$/.test(fields.eventType) && e.shotDetails ? {
+                ...e.shotDetails,
+                andOne: fields.eventType.endsWith("_made") && e.shotDetails.andOne,
+                badMiss: fields.eventType.endsWith("_miss") && e.shotDetails.badMiss,
+              } : undefined,
               eventType: fields.eventType,
+              decisionQuality: normalizeDecisionQuality(fields.eventType, fields.playerId, fields.decisionQuality),
               label: fields.label,
               teamId: fields.teamId,
               playerId: fields.playerId,
@@ -472,31 +557,37 @@ export function TagWorkspace({
               slobPlayName: fields.eventType === "slob" ? fields.typeValue : null,
               manToManType: fields.eventType === "man_to_man" ? fields.typeValue : null,
               zoneType: fields.eventType === "zone" ? fields.typeValue : null,
+              pressType: fields.eventType === "press" ? fields.typeValue : null,
               offActionType: fields.eventType === "off_action" ? fields.typeValue : null,
               defCoverageType: fields.eventType === "def_coverage" ? fields.typeValue : null,
               defOffballType: fields.eventType === "def_offball" ? fields.typeValue : null,
               physicalContactType: fields.eventType === "physical_contact" ? fields.typeValue : null,
               assistType: fields.eventType === "other_assist" ? fields.typeValue : null,
+              boxoutType: fields.eventType === "boxout" ? fields.typeValue : null,
             }
           : e
       )
     );
     setEditingEvent(null);
+    setHistory([]);
+    }, false);
   }
 
   async function handleDeleteEvent() {
     if (!editingEvent) return;
+    await runOperation(async () => {
     const res = await deleteEvent(editingEvent.id);
     if (res.error) {
-      alert(`Алдаа: ${res.error}`);
-      return;
+      throw new Error(res.error);
     }
     setEvents((prev) => prev.filter((e) => e.id !== editingEvent.id));
     setEditingEvent(null);
+    setHistory([]);
+    }, false);
   }
 
   return (
-    <div className="dark grid h-screen grid-rows-[48px_1fr] bg-background text-foreground">
+    <div className="dark flex h-screen min-w-[1050px] flex-col bg-background text-foreground">
       <div className="flex items-center gap-3 border-b border-border px-3">
         <span className="font-semibold">
           Q{period} — {homeTeam.name} vs {visitorTeam.name}
@@ -506,10 +597,11 @@ export function TagWorkspace({
           {scores[visitorTeam.id] ?? 0}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={swapOffDef}>
+          <Button variant="outline" size="sm" title="Энэ удаа нээснээс хойших сүүлийн бүртгэлийг буцаах" disabled={blocked || capturing || !history.length} onClick={undoLast}>↶ Буцаах</Button>
+          <Button variant="outline" size="sm" disabled={blocked || capturing} onClick={swapOffDef}>
             Off: {team(offTeamId).name}
           </Button>
-          <Button variant="outline" size="sm" onClick={swapOffDef}>
+          <Button variant="outline" size="sm" disabled={blocked || capturing} onClick={swapOffDef}>
             Def: {team(defTeamId).name}
           </Button>
           <Link href={`/admin/tag/${gameId}/boxscore`}>
@@ -519,42 +611,73 @@ export function TagWorkspace({
           </Link>
         </div>
       </div>
-
-      <div className="grid min-h-0 grid-cols-[260px_1fr_320px]">
+      <div className="flex items-center gap-3 border-b px-3 py-2 text-sm" role="status" aria-live="polite">
+        <span className={failed ? "text-red-400" : "text-emerald-400"}>{status}</span>
+        {failed && <Button size="sm" disabled={saving} onClick={() => void retryRef.current?.()}>Дахин оролдох</Button>}
+        <span className="ml-auto text-xs text-muted-foreground">Event сонгоход видео түр зогсоно · хадгалаад үргэлжилнэ</span>
+      </div>
+      <fieldset disabled={blocked || capturing || !!editingEvent} className="grid grid-cols-2 gap-3 border-b p-2">
+        {teams.map(t => <div key={t.id} className={`rounded border p-2 ${t.id === offTeamId ? "border-orange-500 bg-orange-500/10" : "border-border"}`}>
+          <div className="mb-2 flex items-center justify-between text-sm font-semibold"><span>{t.name} · {t.id === offTeamId ? "Довтолгоо" : "Хамгаалалт"}</span>
+            <button type="button" className="text-xs underline" onClick={() => setSubMode(v => !v)}>{subMode ? "Сэлгээ цуцлах" : "Сэлгээ"}</button></div>
+          <div className="grid grid-cols-5 gap-1">{(lineup[t.id] ?? [null, null, null, null, null]).map((p, i) => <button type="button" key={i}
+            className={`min-h-14 rounded border px-1 text-xs disabled:opacity-50 ${p && selectedPlayer?.playerId === p.playerId ? "border-blue-400 bg-blue-500/30" : "bg-background"}`}
+            onClick={() => { if (subMode || !p) { if (capture()) setBenchSlot({ teamId: t.id, slot: i + 1 }); } else setSelectedPlayer(p); }}>
+            {p ? <><strong className="block text-lg">#{p.number}</strong>{p.firstName}</> : "+ Тоглогч"}</button>)}</div>
+          {(lineup[t.id] ?? []).filter(Boolean).length !== 5 && <p className="mt-1 text-xs text-amber-400">Талбайн бүрэлдэхүүн 5 хүрээгүй. Тоглогчдоо сонгоно уу.</p>}
+          {subMode && <p className="mt-1 text-xs text-blue-400">Гарах тоглогч → орох тоглогч</p>}
+        </div>)}
+      </fieldset>
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr_320px]">
+        <fieldset disabled={blocked || capturing} className="min-h-0 min-w-0">
         <EventsPanel
           events={events}
           onSeek={(t) => videoRef.current?.seekTo(t)}
-          onEdit={(e) => setEditingEvent(e)}
+          onEdit={(e) => { if (capture()) setEditingEvent(e); }}
         />
+        </fieldset>
+        <div inert={capturing} className={capturing ? "pointer-events-none min-h-0" : "min-h-0"}>
         <VideoPanel
           ref={videoRef}
           videoUrl={videoUrl}
-          live={live}
+          live={live && !capturing}
           initialClockTime={initialClockTime}
           initialVideoTime={initialVideoTime}
         />
-
-        {pickerState ? (
+        </div>
+        <fieldset disabled={blocked} className="min-h-0 min-w-0 overflow-auto">
+        {activePlayerEvent && supportsDecisionQuality(activePlayerEvent.type) && <div className="px-3 pt-3"><DecisionQualityPicker value={decisionQuality} onChange={setDecisionQuality} disabled={!decisionEnabled} /></div>}
+        {benchSlot ? <PlayerPickerPanel title="Орох тоглогч" roster={team(benchSlot.teamId).roster.filter(p => !(lineup[benchSlot.teamId] ?? []).some(on => on?.playerId === p.playerId))}
+          onCancel={cancelCapture} onDone={p => void handleSlotSet(benchSlot.teamId, benchSlot.slot, p)} />
+        : pickerState ? (
           <PlayerPickerPanel
+            key={pickerState.event.type}
+            freeThrow={pickerState.event.type.startsWith("ft_")}
+            finalFreeThrow={followUp === "ft"}
             title={`${pickerState.event.label} — select player`}
             roster={rosterForEvent(pickerState.event)}
-            onCancel={() => setPickerState(null)}
-            onDone={(player) => {
-              commit(pickerState.event, teamIdForEvent(pickerState.event, player), player, null);
-              setPickerState(null);
+            onCancel={cancelCapture}
+            onDone={(player, lastFreeThrow) => {
+              void runOperation(async () => {
+                await commit(pickerState.event, teamIdForEvent(pickerState.event, player), player, null);
+                if (lastFreeThrow && pickerState.event.type.startsWith("ft_")) {
+                  if (pickerState.event.type === "ft_made") { setOffTeamId(defTeamId); setDefTeamId(offTeamId); setFollowUp(null); }
+                  else setFollowUp("rebound");
+                }
+              });
             }}
           />
         ) : shotModalState ? (
           <ShotDetailPanel
+            initial={selectedPlayer && rosterForPicking(shotModalState.teamId).some(p => p.playerId === selectedPlayer.playerId) ? { player: selectedPlayer, details: emptyShot(), assistPlayer: null } : undefined}
             title={shotModalState.event.label}
             roster={rosterForPicking(shotModalState.teamId)}
             defenderRoster={rosterForPicking(defTeamId)}
             isThreePoint={shotModalState.event.type.startsWith("3pt")}
             isMade={shotModalState.event.type.endsWith("_made")}
-            onCancel={() => setShotModalState(null)}
+            onCancel={cancelCapture}
             onDone={(player, details, defender, assistPlayer) => {
-              commit(shotModalState.event, shotModalState.teamId, player, assistPlayer, details, defender);
-              setShotModalState(null);
+              void runOperation(() => commit(shotModalState.event, shotModalState.teamId, player, assistPlayer, details, defender));
             }}
           />
         ) : typeModalState ? (
@@ -566,9 +689,9 @@ export function TagWorkspace({
               typeModalState.event.typeDetail?.secondPlayerOpponent ? opponentRoster : undefined
             }
             config={typeModalState.event.typeDetail!}
-            onCancel={() => setTypeModalState(null)}
+            onCancel={cancelCapture}
             onDone={(player, modifiers, type, secondPlayer, winner) => {
-              commit(
+              void runOperation(() => commit(
                 typeModalState.event,
                 teamIdForEvent(typeModalState.event, player),
                 player,
@@ -576,25 +699,23 @@ export function TagWorkspace({
                 undefined,
                 null,
                 { type, modifiers, secondPlayer, winner }
-              );
-              setTypeModalState(null);
+              ));
             }}
           />
         ) : teamPickerState ? (
           <TeamPickerPanel
             title={`${teamPickerState.event.label} — select team`}
             teams={teams}
-            onCancel={() => setTeamPickerState(null)}
+            onCancel={cancelCapture}
             onDone={(teamId) => {
-              commit(teamPickerState.event, teamId, null, null);
-              setTeamPickerState(null);
+              void runOperation(() => commit(teamPickerState.event, teamId, null, null));
             }}
           />
         ) : subOpen ? (
           <SubstitutionPanel
             teams={teams}
             lineup={lineup}
-            onCancel={() => setSubOpen(false)}
+            onCancel={cancelCapture}
             onBulkSet={handleBulkSet}
             onSlotSet={handleSlotSet}
           />
@@ -610,17 +731,27 @@ export function TagWorkspace({
             title={playNameModalState.event.label}
             names={playNames[playNameModalState.event.playNameDetail!.category] ?? []}
             outcomes={playNameModalState.event.playNameDetail!.outcomes}
-            onCancel={() => setPlayNameModalState(null)}
+            onCancel={cancelCapture}
             onDone={(name, outcome) => handlePickPlayName(playNameModalState.event, name, outcome)}
           />
-        ) : (
+        ) : editingEvent ? <p className="p-3 text-sm">Event засаж байна…</p> : (
+          <>
+          {followUp === "rebound" && <div className="border-b border-blue-500/30 bg-blue-500/10 p-3 text-sm">Самбарыг хэн авсан?
+            <div className="mt-2 flex gap-2">{["off_reb", "def_reb"].map(type => <Button key={type} size="sm" onClick={() => { const def = EDITABLE_EVENTS.find(e => e.type === type); if (def) handleEventTriggered(def); }}>{type === "off_reb" ? "Довтолгооны" : "Хамгаалалтын"}</Button>)}<Button size="sm" variant="ghost" onClick={() => setFollowUp(null)}>Алгасах</Button></div>
+          </div>}
+          {followUp === "ft" && <div className="border-b bg-orange-500/10 p-3 text-sm">And-one · торгуулийн шидэлт
+            <div className="mt-2 flex gap-2">{["ft_made", "ft_miss"].map(type => <Button key={type} size="sm" onClick={() => { const def = EDITABLE_EVENTS.find(e => e.type === type); if (def) handleEventTriggered(def); }}>{type === "ft_made" ? "Орсон" : "Алдсан"}</Button>)}
+            </div>
+          </div>}
           <ActionPanel
             live={live}
             onToggleLive={() => setLive((v) => !v)}
             onEventTriggered={handleEventTriggered}
             onShowMoreOther={() => setMoreOtherOpen(true)}
           />
+          </>
         )}
+        </fieldset>
       </div>
 
       {editingEvent && (
@@ -632,7 +763,11 @@ export function TagWorkspace({
           getCurrentClockTime={() => videoRef.current?.getSnapshot().clockTime ?? editingEvent.clockTime}
           onUpdate={handleUpdateEvent}
           onDelete={handleDeleteEvent}
-          onCancel={() => setEditingEvent(null)}
+          errorText={failed ? status : undefined}
+          onRetry={() => void retryRef.current?.()}
+          blocked={blocked}
+          decisionEnabled={decisionEnabled}
+          onCancel={() => { setEditingEvent(null); cancelCapture(); }}
         />
       )}
     </div>

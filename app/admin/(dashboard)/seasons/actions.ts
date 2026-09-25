@@ -1,5 +1,7 @@
 "use server";
 
+import { requireSuperadmin } from "@/lib/club-event-access";
+
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import type { SeasonStatus } from "@/lib/types";
@@ -22,6 +24,7 @@ export async function createSeason(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
+  await requireSuperadmin();
   const parsed = parseSeasonInput(formData);
   if ("error" in parsed) return { error: parsed.error };
 
@@ -38,6 +41,7 @@ export async function updateSeason(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
+  await requireSuperadmin();
   const parsed = parseSeasonInput(formData);
   if ("error" in parsed) return { error: parsed.error };
 
@@ -49,6 +53,7 @@ export async function updateSeason(
 }
 
 export async function deleteSeason(id: string) {
+  await requireSuperadmin();
   await supabaseAdmin().from("seasons").delete().eq("id", id);
   revalidatePath("/admin/seasons");
   revalidatePath("/admin");

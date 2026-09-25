@@ -15,6 +15,7 @@ export interface PlayerStats {
   minSeconds: number;
   pts: number;
   ast: number;
+  otherAssist: number;
   shots: number;
   opps: number;
   efgPct: number;
@@ -36,6 +37,7 @@ export interface PlayerStats {
   offFoul: number;
   offActionTag: number;
   to: number;
+  forcedTo: number;
   lostTieUp: number;
   usagePct: number | null; // null for the ALL row — not a meaningful team-level stat
   offPPP: number;
@@ -97,6 +99,7 @@ export function computePlayerStats(
   const ast =
     mine.filter((e) => e.eventType === "assist" || e.eventType === "other_assist").length +
     inRangeChrono.filter((e) => (playerId ? e.assistPlayerId === playerId : e.teamId === teamId && e.assistPlayerId)).length;
+  const otherAssist = mine.filter((e) => e.eventType === "other_assist").length;
 
   const fgm2 = mine.filter((e) => e.eventType === "2pt_made").length;
   const fga2 = mine.filter((e) => e.eventType === "2pt_made" || e.eventType === "2pt_miss").length;
@@ -116,6 +119,9 @@ export function computePlayerStats(
   const offFoul = mine.filter((e) => e.eventType === "off_foul").length;
   const offActionTag = mine.filter((e) => e.eventType === "screen_set" || e.eventType === "screen_rcvd").length;
   const to = mine.filter((e) => e.eventType === "turnover").length;
+  // Defensive credit — the defender tagged on a "Forced TO" event, distinct
+  // from `to` above (that team's own giveaways).
+  const forcedTo = mine.filter((e) => e.eventType === "forced_to").length;
   // Not attributable with the current taxonomy: "Tie Up" only records the
   // defender, not which offensive player lost the ball.
   const lostTieUp = 0;
@@ -152,6 +158,7 @@ export function computePlayerStats(
     minSeconds,
     pts,
     ast,
+    otherAssist,
     shots,
     opps,
     efgPct,
@@ -173,6 +180,7 @@ export function computePlayerStats(
     offFoul,
     offActionTag,
     to,
+    forcedTo,
     lostTieUp,
     usagePct,
     offPPP,

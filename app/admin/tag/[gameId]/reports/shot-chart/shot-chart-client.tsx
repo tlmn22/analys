@@ -146,6 +146,7 @@ export function ShotChartClient({
           x: s.event.shotX as number,
           y: s.event.shotY as number,
           color: s.isMade ? MADE_COLOR : MISS_COLOR,
+          made: s.isMade,
           radius: dotSize,
           onClick: () =>
             setModal({
@@ -178,6 +179,7 @@ export function ShotChartClient({
           x: avgX,
           y: avgY,
           color: madeShare >= 0.5 ? MADE_COLOR : MISS_COLOR,
+          made: madeShare >= 0.5,
           radius: dotSize + 3,
         };
       });

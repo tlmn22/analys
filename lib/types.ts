@@ -1,6 +1,9 @@
 export type Gender = "male" | "female";
 export type SeasonStatus = "active" | "inactive";
 export type PlayerPosition = "PG" | "SG" | "SF" | "PF" | "C";
+export type ClubStaffRole = "owner" | "manager" | "head_coach" | "assistant_coach" | "player";
+export type ClubEventType = "gym_prep" | "fitness_prep" | "team_meeting" | "other";
+export type AttendanceStatus = "present" | "absent" | "late" | "excused" | "sick";
 export type GameType =
   | "league"
   | "division"
@@ -16,6 +19,56 @@ export interface Team {
   logo_url: string | null;
   gender: Gender;
   created_at: string;
+}
+
+export interface Club {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  sponsor_name: string | null;
+  sponsor_logo_url: string | null;
+  created_at: string;
+}
+
+/** Public-facing shape — deliberately excludes password_hash so it never
+ * ends up in a page/component that doesn't need it. */
+export interface ClubStaff {
+  id: string;
+  club_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: ClubStaffRole;
+  created_at: string;
+}
+
+export interface ClubStaffWithClub extends ClubStaff {
+  club: Pick<Club, "id" | "name">;
+}
+
+export interface ClubEvent {
+  id: string;
+  club_id: string;
+  name: string;
+  event_type: ClubEventType;
+  location: string | null;
+  start_at: string;
+  end_at: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface ClubEventWithClub extends ClubEvent {
+  club: Pick<Club, "id" | "name">;
+}
+
+export interface ClubEventAttendance {
+  id: string;
+  event_id: string;
+  club_staff_id: string;
+  status: AttendanceStatus;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Season {

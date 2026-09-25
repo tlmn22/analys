@@ -42,8 +42,8 @@ export function TypeDetailPanel({
     winner: RosterPlayer | null
   ) => void;
 }) {
-  const { modifiers, types, otherLabel, secondPlayerLabel, pickWinner } = config;
-  const [stage, setStage] = useState<Stage>(needsPlayer ? "player" : "type");
+  const { modifiers, types, otherLabel, secondPlayerLabel, pickWinner, typeFirst } = config;
+  const [stage, setStage] = useState<Stage>(typeFirst ? "type" : needsPlayer ? "player" : "type");
   const [player, setPlayer] = useState<RosterPlayer | null>(null);
   const [secondPlayer, setSecondPlayer] = useState<RosterPlayer | null>(null);
   const [pickedType, setPickedType] = useState<string | null>(null);
@@ -51,6 +51,10 @@ export function TypeDetailPanel({
 
   function pickPlayer(p: RosterPlayer) {
     setPlayer(p);
+    if (typeFirst) {
+      onDone(p, checked, pickedType as string, secondPlayer, null);
+      return;
+    }
     setStage(secondPlayerLabel ? "second" : "type");
   }
 
@@ -60,6 +64,11 @@ export function TypeDetailPanel({
   }
 
   function pickType(type: string) {
+    if (typeFirst && needsPlayer && !player) {
+      setPickedType(type);
+      setStage("player");
+      return;
+    }
     if (pickWinner && secondPlayer) {
       setPickedType(type);
       setStage("winner");
@@ -71,16 +80,18 @@ export function TypeDetailPanel({
   if (stage === "player") {
     return (
       <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-border p-3">
-        <Button variant="outline" onClick={onCancel}>
-          ← Cancel
+        <Button variant="outline" onClick={() => (typeFirst ? setStage("type") : onCancel())}>
+          {typeFirst ? "← Back" : "← Cancel"}
         </Button>
-        <div className="text-sm font-semibold">{eventLabel}: Pick Player</div>
+        <div className="text-sm font-semibold">
+          {pickedType ? `${eventLabel} (${pickedType}): Pick Player` : `${eventLabel}: Pick Player`}
+        </div>
         {roster.length === 0 && (
           <p className="text-sm text-muted-foreground">Roster хоосон байна.</p>
         )}
         <div className="flex flex-col gap-1.5">
           {roster.map((p) => (
-            <Button key={p.playerId} variant="outline" onClick={() => pickPlayer(p)}>
+            <Button key={p.playerId} variant="outline" className="justify-start" onClick={() => pickPlayer(p)}>
               {playerLabel(p)}
             </Button>
           ))}
@@ -106,7 +117,7 @@ export function TypeDetailPanel({
         )}
         <div className="flex flex-col gap-1.5">
           {candidates.map((p) => (
-            <Button key={p.playerId} variant="outline" onClick={() => pickSecondPlayer(p)}>
+            <Button key={p.playerId} variant="outline" className="justify-start" onClick={() => pickSecondPlayer(p)}>
               {playerLabel(p)}
             </Button>
           ))}
@@ -201,20 +212,24 @@ export function TypeDetailPanel({
             </span>
           </button>
         ))}
-        <button
-          onClick={() => pickType(otherLabel)}
-          className="flex items-stretch overflow-hidden rounded-md border border-blue-400"
-        >
-          <span className="flex w-7 shrink-0 items-center justify-center bg-slate-800 text-[10px] font-bold text-white">
-            ?
-          </span>
-          <span className="flex-1 bg-background px-3 py-2 text-center text-sm font-medium text-blue-500">
-            {otherLabel}
-          </span>
-        </button>
-        <button className="rounded-md bg-slate-600 px-3 py-2 text-center text-sm font-medium text-white hover:bg-slate-500">
-          More Choices...
-        </button>
+        {otherLabel && (
+          <button
+            onClick={() => pickType(otherLabel)}
+            className="flex items-stretch overflow-hidden rounded-md border border-blue-400"
+          >
+            <span className="flex w-7 shrink-0 items-center justify-center bg-slate-800 text-[10px] font-bold text-white">
+              ?
+            </span>
+            <span className="flex-1 bg-background px-3 py-2 text-center text-sm font-medium text-blue-500">
+              {otherLabel}
+            </span>
+          </button>
+        )}
+        {otherLabel && (
+          <button className="rounded-md bg-slate-600 px-3 py-2 text-center text-sm font-medium text-white hover:bg-slate-500">
+            More Choices...
+          </button>
+        )}
       </div>
     </div>
   );

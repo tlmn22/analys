@@ -9,9 +9,13 @@ import {
   FREE_TEXT_TYPE_EVENTS,
 } from "@/lib/tag-events";
 import type { TaggedEvent, TeamInfo } from "./types";
+import { supportsDecisionQuality, type DecisionQuality } from "@/lib/decision-quality";
+import { DecisionQualityPicker } from "./decision-quality-picker";
 
 function currentTypeValue(e: TaggedEvent): string {
   switch (e.eventType) {
+    case "boxout":
+      return e.boxoutType ?? "";
     case "turnover":
       return e.turnoverType ?? "";
     case "off_foul":
@@ -33,6 +37,8 @@ function currentTypeValue(e: TaggedEvent): string {
       return e.manToManType ?? "";
     case "zone":
       return e.zoneType ?? "";
+    case "press":
+      return e.pressType ?? "";
     case "off_action":
       return e.offActionType ?? "";
     case "def_coverage":
@@ -49,6 +55,7 @@ function currentTypeValue(e: TaggedEvent): string {
 }
 
 export interface UpdateEventFields {
+  decisionQuality?: DecisionQuality;
   eventType: string;
   label: string;
   teamId: string | null;
@@ -69,6 +76,10 @@ export function EditEventModal({
   onUpdate,
   onDelete,
   onCancel,
+  errorText,
+  onRetry,
+  blocked = false,
+  decisionEnabled = false,
 }: {
   event: TaggedEvent;
   teams: TeamInfo[];
@@ -78,6 +89,10 @@ export function EditEventModal({
   onUpdate: (fields: UpdateEventFields) => Promise<void>;
   onDelete: () => Promise<void>;
   onCancel: () => void;
+  errorText?: string;
+  onRetry?: () => void;
+  blocked?: boolean;
+  decisionEnabled?: boolean;
 }) {
   const [eventType, setEventType] = useState(event.eventType);
   const [playerId, setPlayerId] = useState(event.playerId ?? "");
@@ -88,6 +103,7 @@ export function EditEventModal({
   const [clockTime, setClockTime] = useState(event.clockTime);
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [decisionQuality, setDecisionQuality] = useState<DecisionQuality>(event.decisionQuality ?? null);
 
   const eventDef = EDITABLE_EVENTS.find((e) => e.type === eventType);
   const isEditableType = !!eventDef;
@@ -98,9 +114,11 @@ export function EditEventModal({
   function handleEventTypeChange(next: string) {
     setEventType(next);
     setTypeValue("");
+    if (!supportsDecisionQuality(next)) setDecisionQuality(null);
   }
 
   async function handleUpdate() {
+    if (blocked) return;
     setSaving(true);
     try {
       const resolvedTeamId = needsPlayer ? (playerId ? (teamIdByPlayerId.get(playerId) ?? null) : null) : teamId;
@@ -114,6 +132,7 @@ export function EditEventModal({
         clockTime,
         keyEvent,
         typeValue: typeValue || null,
+        decisionQuality: decisionEnabled ? decisionQuality : undefined,
       });
     } finally {
       setSaving(false);
@@ -121,6 +140,7 @@ export function EditEventModal({
   }
 
   async function handleDelete() {
+    if (blocked) return;
     setSaving(true);
     try {
       await onDelete();
@@ -135,6 +155,7 @@ export function EditEventModal({
         className="w-full max-w-md rounded-lg bg-background p-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
+        {errorText && <div role="alert" className="mb-3 text-sm text-red-400">{errorText}<Button size="sm" onClick={onRetry}>Дахин оролдох</Button></div>}
         <div className="mb-3 flex items-center justify-between">
           <span className="text-sm font-semibold">
             Edit Event: {event.label} @ {event.clockTime.toFixed(1)}
@@ -145,6 +166,7 @@ export function EditEventModal({
         </div>
 
         <div className="flex flex-col gap-3 text-sm">
+          {supportsDecisionQuality(eventType) && <DecisionQualityPicker value={decisionQuality} onChange={setDecisionQuality} disabled={!decisionEnabled || blocked || saving} />}
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Event:</label>
             <select
