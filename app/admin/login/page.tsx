@@ -25,7 +25,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Нэвтрэх</CardTitle>
-          <CardDescription>Клубын ажилтан email, нууц үгээрээ нэвтэрнэ. Superadmin email-ийг хоосон орхино.</CardDescription>
+          <CardDescription>Клубын гишүүн email, нууц үгээрээ нэвтэрнэ. Тоглогч өөрт хуваарилсан багцаа үзнэ. Superadmin email-ийг хоосон орхино.</CardDescription>
         </CardHeader>
         <CardContent>
           <form action={formAction} className="flex flex-col gap-4">

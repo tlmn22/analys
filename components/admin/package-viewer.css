@@ -1,0 +1,39 @@
+.pv-container { container-type: inline-size; }
+.pv-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; align-items:start; }
+.pv-layout > * { min-width:0; }
+.pv-members { order:1; }
+.pv-video { order:2; }
+.pv-events { order:3; }
+@container (min-width: 720px) {
+  .pv-layout:not(.pv-three) { grid-template-columns:260px minmax(0,1fr); }
+  .pv-layout:not(.pv-three) .pv-events { order:1; }
+}
+@container (min-width: 960px) {
+  .pv-three { grid-template-columns:minmax(230px,.85fr) minmax(400px,1.8fr) minmax(220px,.8fr); }
+}
+
+/* Recipient playback: the video stays visible while only the playlist scrolls. */
+.pv-recipient { position:sticky; top:8px; }
+.pv-recipient .pv-layout {
+  height:calc(100dvh - 112px - env(safe-area-inset-bottom, 0px));
+  min-height:320px;
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr);
+  gap:10px;
+  align-items:stretch;
+}
+.pv-recipient .pv-video { order:1; padding:10px; }
+.pv-recipient .pv-screen { max-height:40dvh; }
+.pv-recipient .pv-events { order:2; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+.pv-recipient .pv-events h2 { flex-shrink:0; padding:10px 12px; }
+.pv-recipient .pv-event-list { min-height:0; max-height:none; flex:1; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+@container (min-width:720px) {
+  .pv-recipient .pv-layout:not(.pv-three) { grid-template-columns:minmax(0,1fr) 280px; grid-template-rows:minmax(0,1fr); }
+  .pv-recipient .pv-layout:not(.pv-three) .pv-events { order:2; }
+  .pv-recipient .pv-video { overflow:auto; }
+  .pv-recipient .pv-screen { max-height:60dvh; }
+}
+@media (max-height:520px) {
+  .pv-recipient .pv-layout { grid-template-columns:minmax(0,1fr) minmax(150px,.65fr); grid-template-rows:minmax(0,1fr); min-height:220px; }
+  .pv-recipient .pv-video { overflow:auto; }
+}

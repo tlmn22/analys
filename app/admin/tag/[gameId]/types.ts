@@ -63,6 +63,8 @@ export interface TaggedEvent {
   physicalContactType?: string | null;
   physicalContactSecondLabel?: string | null;
   physicalContactWinnerLabel?: string | null;
+  defenseType?: string | null;
+  helpDefenseType?: string | null;
   boxoutType?: string | null;
 }
 

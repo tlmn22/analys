@@ -64,6 +64,8 @@ export function EventsPanel({
                   {e.defCoverageType && ` (${e.defCoverageType})`}
                   {e.defOffballType && ` (${e.defOffballType})`}
                   {e.physicalContactType && ` (${e.physicalContactType})`}
+                  {e.defenseType && ` (${e.defenseType})`}
+                  {e.helpDefenseType && ` (${e.helpDefenseType})`}
                   {e.boxoutType && ` (${e.boxoutType})`}
                 </span>
               </div>

@@ -33,7 +33,7 @@ export default async function DecisionMakingPage({ params }: { params: Promise<{
   const teams = [{ id: info.game.home_team_id, name: info.homeTeamName }, { id: info.game.visitor_team_id, name: info.visitorTeamName }];
   return <main className="min-h-screen bg-background p-6 text-foreground">
     <div className="mx-auto max-w-[1600px] space-y-6">
-      <Link href={`/admin/tag/${gameId}`} className="text-sm text-blue-500 hover:underline">← Tag руу буцах</Link>
+      <Link href="/admin/scouting-reports" className="text-sm text-blue-500 hover:underline">← Scouting Reports</Link>
       <ReportHeader gameId={gameId} icon={<ClipboardCheckIcon className="size-7" />} title="Довтолгооны шийдвэр" activeSlug="decision-making" info={info} />
       <p className="text-sm text-muted-foreground">Зөв шийдвэрийн хувь = Зөв / (Зөв + Буруу). Үнэлээгүй үйлдлийг хувьд оруулахгүй. Энэ нь тэмдэглэсэн үйлдлийн үнэлгээ бөгөөд нийт довтолгооны тоо биш.</p>
       {failed || playersError ? <p role="alert" className="rounded border border-amber-500/40 p-4 text-amber-500">Шийдвэрийн үнэлгээг ачаалж чадсангүй. Дахин ачаална уу. Шинээр суулгаж байгаа бол өгөгдлийн сангийн шинэчлэл хийгдсэн эсэхийг шалгана уу.</p> :

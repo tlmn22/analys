@@ -267,6 +267,8 @@ export function TagWorkspace({
       let physicalContactType: string | null = null;
       let physicalContactSecondPlayerId: string | null = null;
       let physicalContactWinnerPlayerId: string | null = null;
+      let defenseType: string | null = null;
+      let helpDefenseType: string | null = null;
       let boxoutType: string | null = null;
       let foulDetails:
         | { type: string; fiftyFifty: boolean; badCall: boolean; correctCall: boolean }
@@ -315,6 +317,10 @@ export function TagWorkspace({
           physicalContactType = typeDetailResult.type;
           physicalContactSecondPlayerId = typeDetailResult.secondPlayer?.playerId ?? null;
           physicalContactWinnerPlayerId = typeDetailResult.winner?.playerId ?? null;
+        } else if (eventDef.type === "good_defense" || eventDef.type === "bad_defense") {
+          defenseType = typeDetailResult.type;
+        } else if (eventDef.type === "help_defense") {
+          helpDefenseType = typeDetailResult.type;
         } else if (eventDef.type === "boxout") {
           boxoutType = typeDetailResult.type;
         }
@@ -361,6 +367,8 @@ export function TagWorkspace({
         physicalContactType,
         physicalContactSecondPlayerId,
         physicalContactWinnerPlayerId,
+        defenseType,
+        helpDefenseType,
         boxoutType,
       });
       if ("error" in result) {
@@ -417,6 +425,8 @@ export function TagWorkspace({
             ? playerLabel(typeDetailResult.secondPlayer)
             : null,
         physicalContactWinnerLabel: typeDetailResult?.winner ? playerLabel(typeDetailResult.winner) : null,
+        defenseType,
+        helpDefenseType,
         boxoutType,
       };
       setEvents((prev) => [newEvent, ...prev.filter(e => e.id !== newEvent.id)]);
@@ -563,6 +573,8 @@ export function TagWorkspace({
               defOffballType: fields.eventType === "def_offball" ? fields.typeValue : null,
               physicalContactType: fields.eventType === "physical_contact" ? fields.typeValue : null,
               assistType: fields.eventType === "other_assist" ? fields.typeValue : null,
+              defenseType: ["good_defense", "bad_defense"].includes(fields.eventType) ? fields.typeValue : null,
+              helpDefenseType: fields.eventType === "help_defense" ? fields.typeValue : null,
               boxoutType: fields.eventType === "boxout" ? fields.typeValue : null,
             }
           : e

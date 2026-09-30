@@ -1,6 +1,6 @@
 "use server";
 
-import { requireSuperadmin } from "@/lib/club-event-access";
+import { getEventEditor, requireSuperadmin } from "@/lib/club-event-access";
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
@@ -46,9 +46,13 @@ export async function createClubEvent(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireSuperadmin();
+  const editor = await getEventEditor();
+  if (!editor) return { error: "Эвент үүсгэх эрхгүй байна." };
   const parsed = parseClubEventInput(formData);
   if ("error" in parsed) return { error: parsed.error };
+  if (editor.role === "club_staff" && parsed.club_id !== editor.clubId) {
+    return { error: "Зөвхөн өөрийн клубт эвент үүсгэх боломжтой." };
+  }
 
   const { error } = await supabaseAdmin().from("club_events").insert(parsed);
   if (error) return { error: error.message };

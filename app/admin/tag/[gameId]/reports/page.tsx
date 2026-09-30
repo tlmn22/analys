@@ -18,8 +18,11 @@ export default async function ReportsHubPage({
   return (
     <div className="min-h-screen bg-background p-6 text-foreground">
       <div className="mx-auto max-w-[1600px]">
-        <Link href={`/admin/tag/${gameId}`} className="text-sm text-blue-500 hover:underline">
-          ← Tag руу буцах
+        <Link href="/admin/scouting-reports" className="text-sm text-blue-500 hover:underline">
+          ← Scouting Reports
+        </Link>
+        <Link href="/admin/event-packages" className="ml-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600">
+          Videos →
         </Link>
         <div className="mt-3">
           <ReportHeader

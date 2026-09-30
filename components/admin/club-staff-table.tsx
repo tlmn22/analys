@@ -20,6 +20,19 @@ import { PlusIcon, PencilIcon } from "lucide-react";
 
 
 type SortKey = "name" | "email" | "club" | "role";
+const roleFilters = [
+  { value: "all", label: "Бүгд" },
+  { value: "player", label: "Тоглогчид" },
+  { value: "coach", label: "Дасгалжуулагчид" },
+  { value: "manager", label: "Менежерүүд" },
+  { value: "owner", label: "Эзэмшигчид" },
+] as const;
+type RoleFilter = (typeof roleFilters)[number]["value"];
+function matchesRole(person: ClubStaffWithClub, filter: RoleFilter) {
+  return filter === "all" || (filter === "coach"
+    ? person.role === "head_coach" || person.role === "assistant_coach"
+    : person.role === filter);
+}
 const columns: { key: SortKey; label: string }[] = [
   { key: "name", label: "Нэр" }, { key: "email", label: "Email" },
   { key: "club", label: "Клуб" }, { key: "role", label: "Үүрэг" },
@@ -30,7 +43,8 @@ export function ClubStaffTable({ staff, clubs, isAdmin, canManage }: {
 }) {
   const [sort, setSort] = useState<SortKey>("name");
   const [direction, setDirection] = useState<"asc" | "desc">("asc");
-  const sortedStaff = [...staff].sort((a, b) => {
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const sortedStaff = staff.filter(person => matchesRole(person, roleFilter)).sort((a, b) => {
     const value = (person: ClubStaffWithClub) => sort === "email" ? person.email : sort === "club" ? person.club?.name ?? "" : ROLE_LABELS[person.role];
     const order = sort === "name" ? compareMemberNames(a, b) : compareMemberNames(
       { ...a, first_name: value(a), last_name: "", id: "" },
@@ -64,6 +78,24 @@ export function ClubStaffTable({ staff, clubs, isAdmin, canManage }: {
         </p>
       )}
 
+      <div className="flex flex-col gap-2">
+        <div role="group" aria-label="Гишүүдийг үүргээр шүүх" className="flex flex-wrap gap-2">
+          {roleFilters.map(filter => (
+            <Button
+              key={filter.value}
+              type="button"
+              size="sm"
+              variant={roleFilter === filter.value ? "default" : "outline"}
+              aria-pressed={roleFilter === filter.value}
+              onClick={() => setRoleFilter(filter.value)}
+            >
+              {filter.label} ({staff.filter(person => matchesRole(person, filter.value)).length})
+            </Button>
+          ))}
+        </div>
+        <p role="status" className="text-sm text-muted-foreground">{sortedStaff.length} гишүүн харагдаж байна.</p>
+      </div>
+
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
@@ -77,10 +109,10 @@ export function ClubStaffTable({ staff, clubs, isAdmin, canManage }: {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {staff.length === 0 && (
+            {sortedStaff.length === 0 && (
               <TableRow>
                 <TableCell colSpan={canManage ? 5 : 4} className="py-8 text-center text-muted-foreground">
-                  Ажилтан бүртгэгдээгүй байна
+                  {staff.length === 0 ? "Ажилтан бүртгэгдээгүй байна" : "Сонгосон үүрэгтэй гишүүн байхгүй байна"}
                 </TableCell>
               </TableRow>
             )}

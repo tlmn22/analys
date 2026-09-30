@@ -8,10 +8,12 @@ import {
   ShieldIcon,
   UsersIcon,
   CalendarIcon,
+  FolderOpenIcon,
   Building2Icon,
   IdCardIcon,
   CalendarCheckIcon,
   ChartNoAxesCombinedIcon,
+  ClipboardListIcon,
 } from "lucide-react";
 
 export const navItems = [
@@ -29,17 +31,25 @@ export const clubNavItems = [
   { href: "/admin/club-load-monitoring", label: "Ачааллын Monitoring", icon: ChartNoAxesCombinedIcon },
 ];
 
+export const scoutingNavItems = [
+  { href: "/admin/scouting-reports", label: "Scouting Reports", icon: ClipboardListIcon },
+  { href: "/admin/event-packages", label: "Videos", icon: FolderOpenIcon },
+];
+
 export function SidebarNav({ eventsOnly = false }: { eventsOnly?: boolean }) {
   const pathname = usePathname();
+  const groups = eventsOnly
+    ? [clubNavItems.filter(item => item.href !== "/admin/clubs"), scoutingNavItems]
+    : [navItems, clubNavItems, scoutingNavItems];
 
   return (
     <nav className="flex flex-1 flex-col gap-1">
-      {(eventsOnly ? [clubNavItems.filter((item) => ["/admin/club-staff", "/admin/club-events", "/admin/club-reports", "/admin/club-load-monitoring"].includes(item.href))] : [navItems, clubNavItems]).map((items, groupIndex) => (
+      {groups.map((items, groupIndex) => (
         <div
           key={groupIndex}
           className={cn(
             "flex flex-col gap-1",
-            groupIndex === 1 && "mt-6 border-t border-border pt-4"
+            groupIndex > 0 && "mt-6 border-t border-border pt-4"
           )}
         >
           {items.map((item) => {

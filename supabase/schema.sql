@@ -198,6 +198,7 @@ create table game_events (
   physical_contact_second_player_id uuid references players(id),
   physical_contact_winner_player_id uuid references players(id),
   -- Boxout detail (Good/Bad call quality, either team):
+  help_defense_type text check (help_defense_type in ('Good', 'Normal', 'Bad')),
   boxout_type text,
   -- Marks a game-turning moment, set only via editing an already-tagged
   -- event — the analyst's own judgment call, not derived from anything:
@@ -257,3 +258,88 @@ on conflict (id) do nothing;
 create policy "Public read access to images"
   on storage.objects for select
   using (bucket_id = 'images');
+
+
+-- Admin-only scouting collections. Sharing is intentionally not enabled.
+create table public.event_packages (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(btrim(name)) between 1 and 120),
+  description text not null default '' check (char_length(description) <= 2000),
+  created_at timestamptz not null default now()
+);
+create table public.event_package_items (
+  id uuid primary key default gen_random_uuid(),
+  package_id uuid not null references public.event_packages(id) on delete cascade,
+  event_id uuid not null references public.game_events(id) on delete cascade,
+  lead_seconds integer not null default 7 check (lead_seconds >= 0),
+  trail_seconds integer not null default 7 check (trail_seconds >= 0),
+  created_at timestamptz not null default now(),
+  unique (package_id, event_id)
+);
+alter table public.event_packages enable row level security;
+alter table public.event_package_items enable row level security;
+revoke all on public.event_packages, public.event_package_items from anon, authenticated;
+grant all on public.event_packages, public.event_package_items to service_role;
+
+-- Creating a collection and adding its first event succeed or fail together.
+create function public.create_event_package_with_event(package_name text, package_description text, selected_event_id uuid)
+returns uuid language plpgsql security invoker set search_path = public as $$
+declare new_id uuid;
+begin
+  insert into event_packages(name, description) values (btrim(package_name), coalesce(package_description, '')) returning id into new_id;
+  insert into event_package_items(package_id, event_id) values (new_id, selected_event_id);
+  return new_id;
+end;
+$$;
+revoke all on function public.create_event_package_with_event(text, text, uuid) from public, anon, authenticated;
+grant execute on function public.create_event_package_with_event(text, text, uuid) to service_role;
+notify pgrst, 'reload schema';
+
+-- Requires 029_event_packages.sql. Create the package and its clips atomically.
+create function public.create_event_package_with_events(package_name text, package_description text, selected_event_ids uuid[])
+returns uuid language plpgsql security invoker set search_path = public as $$
+declare new_id uuid;
+begin
+  if coalesce(cardinality(selected_event_ids), 0) < 1 or cardinality(selected_event_ids) > 1000 then
+    raise exception 'Select between 1 and 1000 events';
+  end if;
+  insert into event_packages(name, description)
+    values (btrim(package_name), coalesce(package_description, '')) returning id into new_id;
+  insert into event_package_items(package_id, event_id)
+    select new_id, event_id from unnest(selected_event_ids) as selected(event_id)
+    on conflict (package_id, event_id) do nothing;
+  return new_id;
+end;
+$$;
+revoke all on function public.create_event_package_with_events(text, text, uuid[]) from public, anon, authenticated;
+grant execute on function public.create_event_package_with_events(text, text, uuid[]) to service_role;
+notify pgrst, 'reload schema';
+
+create table public.event_package_assignments (
+  id uuid primary key default gen_random_uuid(),
+  package_id uuid not null references public.event_packages(id) on delete cascade,
+  member_id uuid not null references public.club_staff(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique(package_id, member_id)
+);
+create index event_package_assignments_member_idx on public.event_package_assignments(member_id);
+alter table public.event_package_assignments enable row level security;
+revoke all on public.event_package_assignments from anon, authenticated;
+grant all on public.event_package_assignments to service_role;
+notify pgrst, 'reload schema';
+
+
+-- Apply before deploying Good Defense / Bad Defense tagging.
+alter table public.game_events
+  add column if not exists defense_type text;
+
+alter table public.game_events
+  add constraint game_events_defense_type_check check (
+    (event_type = 'good_defense' and defense_type is not null
+      and defense_type in ('Save Mid', 'Good Help') and player_id is not null and team_id is not null)
+    or (event_type = 'bad_defense' and defense_type is not null
+      and defense_type in ('Lost Mid', 'Bad Help') and player_id is not null and team_id is not null)
+    or (event_type not in ('good_defense', 'bad_defense') and defense_type is null)
+  );
+
+notify pgrst, 'reload schema';

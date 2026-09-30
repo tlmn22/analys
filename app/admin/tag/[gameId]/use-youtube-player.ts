@@ -8,6 +8,7 @@ interface YTPlayer {
   seekTo(seconds: number, allowSeekAhead: boolean): void;
   setPlaybackRate(rate: number): void;
   getCurrentTime(): number;
+  getDuration(): number;
   destroy(): void;
 }
 
@@ -117,5 +118,6 @@ export function useYouTubePlayer(videoId: string | null) {
       : 0;
   }, []);
 
-  return { containerRef, playing, ready, play, pause, seekTo, setRate, getCurrentTime };
+  const getDuration = useCallback(() => typeof playerRef.current?.getDuration === "function" ? playerRef.current.getDuration() : 0, []);
+  return { containerRef, playing, ready, play, pause, seekTo, setRate, getCurrentTime, getDuration };
 }

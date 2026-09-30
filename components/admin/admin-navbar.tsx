@@ -6,13 +6,13 @@ import { useTheme } from "next-themes";
 import { SearchIcon, MoonIcon, SunIcon, ChevronDownIcon, LogOutIcon } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { logout } from "@/app/admin/actions";
-import { navItems, clubNavItems } from "./sidebar-nav";
+import { navItems, clubNavItems, scoutingNavItems } from "./sidebar-nav";
 
 export function AdminNavbar({ name, role, club, isAdmin }: { name: string; role: string; club: string; isAdmin: boolean }) {
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
-  const links = isAdmin ? [...navItems, ...clubNavItems] : clubNavItems.filter(item => item.href !== "/admin/clubs");
+  const links = [...(isAdmin ? [...navItems, ...clubNavItems] : clubNavItems.filter(item => item.href !== "/admin/clubs")), ...scoutingNavItems];
   const results = links.filter(item => item.label.toLowerCase().includes(search.trim().toLowerCase()));
   return <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 px-4 py-4 backdrop-blur sm:px-6">
     <div className="relative min-w-40 flex-1 max-w-md" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}>
@@ -35,6 +35,7 @@ export function AdminNavbar({ name, role, club, isAdmin }: { name: string; role:
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-64">
           <div className="border-b px-3 py-3"><p className="font-semibold">{name}</p><p className="text-sm text-muted-foreground">{role}</p><p className="mt-2 text-xs text-muted-foreground">{club}</p></div>
+          {!isAdmin && <Link href="/admin/event-packages" className="block rounded px-3 py-2 text-sm hover:bg-muted">Videos</Link>}
           <DropdownMenuItem onClick={() => { void logout(); }}><LogOutIcon />Системээс гарах</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

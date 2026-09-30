@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { reportAccess } from "@/lib/scouting-access";
 import type { Game, Team } from "@/lib/types";
 
 export interface ReportHeaderInfo {
@@ -13,6 +14,7 @@ export interface ReportHeaderInfo {
  * here rather than duplicated per report. Returns null if the game doesn't
  * exist (caller should notFound()). */
 export async function getReportHeaderInfo(gameId: string): Promise<ReportHeaderInfo | null> {
+  if (!await reportAccess(gameId)) return null;
   const db = supabaseAdmin();
 
   const { data: gameRow } = await db.from("games").select("*").eq("id", gameId).maybeSingle();

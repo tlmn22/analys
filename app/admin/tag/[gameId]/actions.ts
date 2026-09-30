@@ -40,6 +40,8 @@ export interface TagEventInput {
   physicalContactType?: string | null;
   physicalContactSecondPlayerId?: string | null;
   physicalContactWinnerPlayerId?: string | null;
+  defenseType?: string | null;
+  helpDefenseType?: string | null;
   boxoutType?: string | null;
   foulDetails?: {
     type: string;
@@ -63,11 +65,18 @@ export interface TagEventInput {
   };
 }
 
+function validDefense(eventType: string, detail: string | null | undefined, player: string | null, team: string | null) {
+  const types = eventType === "good_defense" ? ["Save Mid", "Good Help"] : eventType === "bad_defense" ? ["Lost Mid", "Bad Help"] : null;
+  return !types || (!!player && !!team && types.includes(detail ?? ""));
+}
+
 export async function tagEvent(
   input: TagEventInput
 ): Promise<{ id: string } | { error: string }> {
   await requireSuperadmin();
   if (!Number.isInteger(input.period) || input.period < 1 || !Number.isFinite(input.clockTime) || input.clockTime < 0 || !Number.isFinite(input.videoTime) || input.videoTime < 0) return { error: "Үе болон цагийн утга буруу байна." };
+  if (input.eventType === "help_defense" && (!input.playerId || !input.teamId || !["Good", "Normal", "Bad"].includes(input.helpDefenseType ?? ""))) return { error: "Help Defense: тамирчин болон Good / Normal / Bad үнэлгээг сонгоно уу." };
+  if (!validDefense(input.eventType, input.defenseType, input.playerId, input.teamId)) return { error: "Select a defense type, team and player." };
   const d = input.shotDetails;
   const f = input.foulDetails;
   const { data, error } = await supabaseAdmin()
@@ -105,6 +114,8 @@ export async function tagEvent(
       physical_contact_type: input.physicalContactType ?? null,
       physical_contact_second_player_id: input.physicalContactSecondPlayerId ?? null,
       physical_contact_winner_player_id: input.physicalContactWinnerPlayerId ?? null,
+      defense_type: ["good_defense", "bad_defense"].includes(input.eventType) ? input.defenseType : null,
+      help_defense_type: input.eventType === "help_defense" ? input.helpDefenseType : null,
       boxout_type: input.boxoutType ?? null,
       points: input.points,
       ...(d && {
@@ -141,6 +152,9 @@ export async function tagEvent(
 // column is explicitly cleared on update so switching event types doesn't
 // leave stale data behind from whatever the event used to be.
 const TYPE_DB_COLUMN: Record<string, string> = {
+  good_defense: "defense_type",
+  bad_defense: "defense_type",
+  help_defense: "help_defense_type",
   boxout: "boxout_type",
   turnover: "turnover_type",
   off_foul: "foul_type",
@@ -176,6 +190,8 @@ export interface UpdateEventInput {
 
 export async function updateEvent(input: UpdateEventInput): Promise<{ error?: string }> {
   await requireSuperadmin();
+  if (input.eventType === "help_defense" && (!input.playerId || !input.teamId || !["Good", "Normal", "Bad"].includes(input.typeValue ?? ""))) return { error: "Help Defense: тамирчин болон үнэлгээг сонгоно уу." };
+  if (!validDefense(input.eventType, input.typeValue, input.playerId, input.teamId)) return { error: "Select a defense type, team and player." };
   const detailColumns: Record<string, string | null> = {
     turnover_type: null,
     foul_type: null,
@@ -190,6 +206,8 @@ export async function updateEvent(input: UpdateEventInput): Promise<{ error?: st
     press_type: null,
     physical_contact_type: null,
     assist_type: null,
+    defense_type: null,
+    help_defense_type: null,
     boxout_type: null,
     off_action_type: null,
     def_coverage_type: null,

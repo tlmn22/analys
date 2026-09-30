@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireSuperadmin } from "@/lib/club-event-access";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import type { Game, RosterWithPlayer, SeasonTeamWithTeam, Team } from "@/lib/types";
@@ -50,6 +51,7 @@ export default async function TagPage({
   params: Promise<{ gameId: string }>;
 }) {
   const { gameId } = await params;
+  await requireSuperadmin();
   const db = supabaseAdmin();
 
   const { data: gameRow, error: gameError } = await db
@@ -205,6 +207,8 @@ export default async function TagPage({
     slobOutcome: e.slob_outcome,
     manToManType: e.man_to_man_type,
     zoneType: e.zone_type,
+    defenseType: e.defense_type,
+    helpDefenseType: e.help_defense_type,
     pressType: e.press_type,
     offActionType: e.off_action_type,
     defCoverageType: e.def_coverage_type,

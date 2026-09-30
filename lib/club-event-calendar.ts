@@ -4,6 +4,24 @@ const dayFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: CLUB_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
 });
 
+// Assemble visible text ourselves: browsers may fall back from mn-MN to
+// English while the server supports Mongolian, causing hydration mismatches.
+const clockFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: CLUB_TIME_ZONE, calendar: "gregory", numberingSystem: "latn",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+
+export function calendarTime(instant: string | Date): string {
+  const parts = clockFormatter.formatToParts(new Date(instant));
+  const part = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${part("hour").padStart(2, "0")}:${part("minute").padStart(2, "0")}`;
+}
+
+export function calendarDateTime(instant: string | Date): string {
+  const day = calendarDay(instant);
+  return `${Number(day.slice(5, 7))}-р сарын ${Number(day.slice(8, 10))} ${calendarTime(instant)}`;
+}
+
 export function calendarDay(instant: string | Date): string {
   const parts = dayFormatter.formatToParts(new Date(instant));
   const part = (type: string) => parts.find((p) => p.type === type)!.value;

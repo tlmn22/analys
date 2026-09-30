@@ -90,6 +90,21 @@ export interface PlayNameConfig {
 /** Boolean modifier checkboxes shown on the shot-detail screen. `field`
  * matches the corresponding game_events column (camelCase on the client,
  * snake_case in the DB — mapped in actions.ts). */
+export const GOOD_DEFENSE_TYPES: TypeOption[] = [
+  { key: "", label: "Save Mid" },
+  { key: "", label: "Good Help" },
+];
+export const BAD_DEFENSE_TYPES: TypeOption[] = [
+  { key: "", label: "Lost Mid" },
+  { key: "", label: "Bad Help" },
+];
+
+export const HELP_DEFENSE_TYPES: TypeOption[] = [
+  { key: "g", label: "Good" },
+  { key: "n", label: "Normal" },
+  { key: "b", label: "Bad" },
+];
+
 export const SHOT_MODIFIERS: { field: string; label: string }[] = [
   { field: "andOne", label: "and 1" },
   { field: "badMiss", label: "bad miss" },
@@ -313,6 +328,8 @@ export const OFFENSE: EventDef[] = [
 // Individual defensive actions are blue, distinct from the orange used by
 // Defensive Team Sets below — matches the reference tool's color split.
 export const DEFENSE: EventDef[] = [
+  { key: "", label: "Good Defense", type: "good_defense", needsPlayer: true, side: "def", color: "green", typeDetail: { types: GOOD_DEFENSE_TYPES, typeFirst: true } },
+  { key: "", label: "Bad Defense", type: "bad_defense", needsPlayer: true, side: "def", color: "red", typeDetail: { types: BAD_DEFENSE_TYPES, typeFirst: true } },
   { key: "r", label: "Def Reb", type: "def_reb", needsPlayer: true, side: "def", color: "blue" },
   {
     key: "f",
@@ -323,6 +340,7 @@ export const DEFENSE: EventDef[] = [
     color: "red",
     typeDetail: { otherLabel: "Other Def Foul", types: DEF_FOUL_TYPES, modifiers: OFF_FOUL_MODIFIERS },
   },
+  { key: "", label: "Help Defense", type: "help_defense", needsPlayer: true, side: "def", color: "blue", typeDetail: { types: HELP_DEFENSE_TYPES } },
   { key: "b", label: "Block Shot", type: "block", needsPlayer: true, side: "def", color: "blue" },
   { key: "s", label: "Steal", type: "steal", needsPlayer: true, side: "def", color: "blue" },
   { key: "j", label: "Tie Up", type: "tie_up", needsPlayer: true, side: "def", color: "blue" },
@@ -568,6 +586,9 @@ export const EDITABLE_EVENTS: EventDef[] = [
  * Contact) only expose their primary type here — the extra fields aren't
  * editable through this generic modal. */
 export const TYPE_OPTIONS_BY_EVENT: Record<string, TypeOption[] | undefined> = {
+  good_defense: GOOD_DEFENSE_TYPES,
+  bad_defense: BAD_DEFENSE_TYPES,
+  help_defense: HELP_DEFENSE_TYPES,
   boxout: BOXOUT_TYPES,
   turnover: TURNOVER_TYPES,
   off_foul: OFF_FOUL_TYPES,

@@ -19,10 +19,12 @@ export default async function ClubEventsPage() {
     .select("id, club_id, name, event_type, location, start_at, end_at, description, created_at, club:clubs(id, name)")
     .order("start_at", { ascending: false });
   if (editor.role === "club_staff") eventsQuery = eventsQuery.eq("club_id", editor.clubId);
+  let clubsQuery = db.from("clubs").select("id, name").order("name");
+  if (editor.role === "club_staff") clubsQuery = clubsQuery.eq("id", editor.clubId);
 
   const [eventsRes, clubsRes] = await Promise.all([
     eventsQuery.returns<ClubEventWithClub[]>(),
-    isAdmin ? db.from("clubs").select("id, name").order("name").returns<Pick<Club, "id" | "name">[]>() : Promise.resolve({ data: [] as Pick<Club, "id" | "name">[], error: null }),
+    clubsQuery.returns<Pick<Club, "id" | "name">[]>(),
   ]);
 
   if (eventsRes.error) {
@@ -43,7 +45,7 @@ export default async function ClubEventsPage() {
         </div>
         <div className="flex items-center gap-2">
         <Button variant="outline" nativeButton={false} render={<Link href="/admin/club-reports" />}>Ирцийн тайлан</Button>
-        {isAdmin && <ClubEventFormDialog
+        <ClubEventFormDialog
           clubs={clubs}
           trigger={
             <Button disabled={clubs.length === 0}>
@@ -51,7 +53,7 @@ export default async function ClubEventsPage() {
               Эвент зарлах
             </Button>
           }
-        />}
+        />
         </div>
       </div>
 

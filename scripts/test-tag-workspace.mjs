@@ -268,3 +268,67 @@ assert.equal(boxes[0].props.checked, false); assert.equal(boxes[1].props.checked
 boxes[1].props.onChange({ target: { checked: false } });
 assert.equal(value, null);
 console.log('PASS: decision selection exclusivity, persistence/retry, edit/clear, offensive eligibility, report denominator, ungraded and duplicate handling');
+
+const helpDef = definitions.DEFENSE.find(e => e.type === "help_defense");
+assert.equal(helpDef.side, "def");
+assert.equal(helpDef.needsPlayer, true);
+assert.ok(!helpDef.typeDetail.typeFirst);
+assert.deepEqual(helpDef.typeDetail.types.map(t => t.label), ["Good", "Normal", "Bad"]);
+for (const quality of ["Good", "Normal", "Bad"]) {
+  const id = `help-${quality}`;
+  assert.equal((await insertServer.tagEvent({ ...insertInput, id, eventType: "help_defense", points: null, helpDefenseType: quality })).id, id);
+  assert.equal(dbEvents.get(id).help_defense_type, quality);
+  await server.updateEvent({ id, eventType: "help_defense", teamId: "home", playerId: "p", typeValue: quality });
+  assert.equal(row.help_defense_type, quality);
+}
+for (const quality of [null, "Early", ""]) {
+  assert.ok((await insertServer.tagEvent({ ...insertInput, eventType: "help_defense", helpDefenseType: quality })).error);
+  assert.ok((await server.updateEvent({ id: "e", eventType: "help_defense", teamId: "home", playerId: "p", typeValue: quality })).error);
+}
+assert.ok((await insertServer.tagEvent({ ...insertInput, eventType: "help_defense", playerId: null, helpDefenseType: "Good" })).error);
+await server.updateEvent({ id: "e", eventType: "turnover", typeValue: "Travel" });
+assert.equal(row.help_defense_type, null);
+states[2] = "h"; states[3] = "v"; states[4] = props.initialLineup;
+trigger("help_defense");
+const helpPanel = panel("./type-detail-panel", "TypeDetailPanel");
+assert.equal(helpPanel.roster[0].playerId, opponent.playerId);
+helpPanel.onDone(opponent, {}, "Normal", null, null);
+await flush();
+assert.equal(states[5][0].helpDefenseType, "Normal");
+assert.equal(states[5][0].teamId, "v");
+console.log("PASS: Help Defense defensive player selection, required ratings, persistence, edit and cleanup");
+
+for (const [eventType, types] of [["good_defense", ["Save Mid", "Good Help"]], ["bad_defense", ["Lost Mid", "Bad Help"]]]) {
+  const def = definitions.DEFENSE.find(e => e.type === eventType);
+  assert.equal(def.side, "def");
+  assert.equal(def.typeDetail.typeFirst, true);
+  assert.deepEqual(def.typeDetail.types.map(t => t.label), types);
+  for (const detail of types) {
+    const id = `${eventType}-${detail}`;
+    assert.equal((await insertServer.tagEvent({ ...insertInput, id, eventType, defenseType: detail, points: null })).id, id);
+    assert.equal(dbEvents.get(id).defense_type, detail);
+    await server.updateEvent({ id, eventType, teamId: "v", playerId: "p", typeValue: detail });
+    assert.equal(row.defense_type, detail);
+    states[2] = "h"; states[3] = "v"; states[4] = props.initialLineup;
+    trigger(eventType);
+    const defensePanel = panel("./type-detail-panel", "TypeDetailPanel");
+    assert.equal(defensePanel.config.typeFirst, true);
+    assert.equal(defensePanel.roster[0].playerId, opponent.playerId);
+    defensePanel.onDone(opponent, {}, detail, null, null);
+    await flush();
+    assert.equal(states[5][0].defenseType, detail);
+    assert.equal(states[5][0].teamId, "v");
+    assert.equal(writes.at(-1).defenseType, detail);
+  }
+  for (const detail of [null, "", "Normal", ...(eventType === "good_defense" ? ["Lost Mid", "Bad Help"] : ["Save Mid", "Good Help"])]) {
+    assert.ok((await insertServer.tagEvent({ ...insertInput, eventType, defenseType: detail })).error);
+    assert.ok((await server.updateEvent({ id: "e", eventType, teamId: "v", playerId: "p", typeValue: detail })).error);
+  }
+  for (const missing of [{ playerId: null }, { teamId: null }]) {
+    assert.ok((await insertServer.tagEvent({ ...insertInput, eventType, defenseType: types[0], ...missing })).error);
+    assert.ok((await server.updateEvent({ id: "e", eventType, teamId: "v", playerId: "p", typeValue: types[0], ...missing })).error);
+  }
+}
+await server.updateEvent({ id: "e", eventType: "turnover", typeValue: "Travel" });
+assert.equal(row.defense_type, null);
+console.log("PASS: Good/Bad Defense choices, defensive roster, save, edit, validation and cleanup");

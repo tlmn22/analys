@@ -85,6 +85,31 @@ function form(values) {
   return data;
 }
 
+test("non-player staff create events only in their current club", async () => {
+  for (const role of [null, "player", "owner", "manager", "head_coach", "assistant_coach", "superadmin"]) {
+    const access = setup(role);
+    const writes = [];
+    const actions = load("app/admin/(dashboard)/club-events/actions.ts", {
+      "@/lib/club-event-access": access,
+      "next/cache": { revalidatePath() {} },
+      "@/lib/supabase/server": { supabaseAdmin: () => ({ from: () => ({
+        async insert(row) { writes.push(row); return { error: null }; },
+      }) }) },
+    });
+    const input = club => form({ club_id: club, name: "Training", event_type: "gym_prep", start_at: "2026-10-01T07:00:00+08:00", end_at: "2026-10-01T09:00:00+08:00" });
+    const allowed = role !== null && role !== "player";
+    assert.equal((await actions.createClubEvent({}, input("club-a"))).success === true, allowed);
+    assert.equal(writes.length, allowed ? 1 : 0);
+    assert.equal((await actions.createClubEvent({}, input("club-b"))).success === true, role === "superadmin");
+    assert.equal(writes.length, role === "superadmin" ? 2 : allowed ? 1 : 0);
+    if (allowed && role !== "superadmin") {
+      access.state.people[0].role = "player";
+      assert.ok((await actions.createClubEvent({}, input("club-a"))).error);
+      assert.equal(writes.length, 1);
+    }
+  }
+});
+
 test("only managers and admins can create/update staff, with club-scoped password resets", async () => {
   for (const role of [null, "player", "owner", "head_coach", "assistant_coach", "manager", "superadmin"]) {
     const access = setup(role);
@@ -160,16 +185,16 @@ test("staff page scopes both queries to the current club and rejects unauthentic
   }
 });
 
-test("proxy restricts club staff to the four permitted sections", async () => {
+test("proxy restricts club staff to permitted sections including Videos", async () => {
   for (const role of ["superadmin", "club_staff"]) {
     const { proxy } = load("proxy.ts", {
       "next/server": { NextResponse: { next: () => "allowed", redirect: () => "redirected" } },
       "@/lib/auth": { SESSION_COOKIE_NAME: "admin_session", readSessionToken: async () => ({ role }) },
     });
-    for (const path of ["/admin", "/admin/teams", "/admin/players", "/admin/seasons", "/admin/clubs", "/admin/tag/game", "/admin/club-staff/invalid"]) {
+    for (const path of ["/admin", "/admin/teams", "/admin/players", "/admin/seasons", "/admin/clubs", "/admin/tag/game", "/admin/tag/game/actions", "/admin/tag/game/reports/game-summary/edit", "/admin/club-staff/invalid"]) {
       assert.equal(await proxy({ nextUrl: new URL(`https://example.com${path}`), url: `https://example.com${path}`, cookies: { get: () => ({ value: "token" }) } }), role === "superadmin" ? "allowed" : "redirected");
     }
-    for (const path of ["/admin/club-staff", "/admin/club-events", "/admin/club-events/event-a/attendance", "/admin/club-reports", "/admin/club-load-monitoring"]) {
+    for (const path of ["/admin/tag/game/reports", "/admin/tag/game/reports/game-summary", "/admin/scouting-reports", "/admin/event-packages", "/admin/event-packages/package-id", "/admin/club-staff", "/admin/club-events", "/admin/club-events/event-a/attendance", "/admin/club-reports", "/admin/club-load-monitoring"]) {
       assert.equal(await proxy({ nextUrl: new URL(`https://example.com${path}`), url: `https://example.com${path}`, cookies: { get: () => ({ value: "token" }) } }), "allowed");
     }
   }
@@ -257,7 +282,7 @@ test("database errors are not reported as successful saves", async () => {
   assert.equal(h.writes.length, 0);
 });
 
-test("staff login permits editor roles, rejects player/incorrect credentials and issues no rejected session", async () => {
+test("staff login permits editor roles, routes players to assigned packages and rejects incorrect credentials and issues no rejected session", async () => {
   for (const role of ["owner", "manager", "head_coach", "assistant_coach", "player"]) {
     const issued = [];
     const query = {
@@ -276,8 +301,8 @@ test("staff login permits editor roles, rejects player/incorrect credentials and
     assert.equal(issued.length, 0);
     const credentials = form({ email: " Staff@Example.com ", password: "correct-password" });
     if (role === "player") {
-      assert.ok((await login({}, credentials)).error);
-      assert.equal(issued.length, 0);
+      await assert.rejects(() => login({}, credentials), /redirect:\/player$/);
+      assert.equal(issued.length, 1);
     } else {
       await assert.rejects(() => login({}, credentials), /redirect:\/admin\/club-events/);
       assert.equal(issued.length, 1);

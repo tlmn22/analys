@@ -14,6 +14,11 @@ import { DecisionQualityPicker } from "./decision-quality-picker";
 
 function currentTypeValue(e: TaggedEvent): string {
   switch (e.eventType) {
+    case "good_defense":
+    case "bad_defense":
+      return e.defenseType ?? "";
+    case "help_defense":
+      return e.helpDefenseType ?? "";
     case "boxout":
       return e.boxoutType ?? "";
     case "turnover":

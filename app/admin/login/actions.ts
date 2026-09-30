@@ -19,15 +19,17 @@ export async function login(
     return { error: "Нууц үгээ оруулна уу" };
   }
   let token: string;
+  let playerLogin = false;
   if (email) {
     const { data: staff, error } = await supabaseAdmin().from("club_staff")
       .select("id, role, password_hash").eq("email", email).maybeSingle();
     if (error || !staff || !(await verifyPassword(password, staff.password_hash))) {
       return { error: "Email эсвэл нууц үг буруу байна" };
     }
-    if (!["owner", "manager", "head_coach", "assistant_coach"].includes(staff.role)) {
-      return { error: "Тоглогч ирц, эвентийн тайлбар засах эрхгүй." };
+    if (!["owner", "manager", "head_coach", "assistant_coach", "player"].includes(staff.role)) {
+      return { error: "Нэвтрэх эрхгүй байна." };
     }
+    playerLogin = staff.role === "player";
     token = await createStaffSessionToken(staff.id);
   } else {
     if (!process.env.ADMIN_PASSWORD) {
@@ -47,5 +49,5 @@ export async function login(
     maxAge: 60 * 60 * 24 * 7,
   });
 
-  redirect(email ? "/admin/club-events" : "/admin");
+  redirect(playerLogin ? "/player" : email ? "/admin/club-events" : "/admin");
 }

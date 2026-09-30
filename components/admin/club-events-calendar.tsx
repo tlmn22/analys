@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ClubEventFormDialog, EVENT_TYPE_LABELS } from "@/components/admin/club-event-form-dialog";
 import { DeleteButton } from "@/components/admin/delete-button";
 import { deleteClubEvent } from "@/app/admin/(dashboard)/club-events/actions";
-import { CLUB_TIME_ZONE, calendarDay, eventOnDay, monthDays, shiftMonth } from "@/lib/club-event-calendar";
+import { calendarTime as time, calendarDateTime as fullDate, calendarDay, eventOnDay, monthDays, shiftMonth } from "@/lib/club-event-calendar";
 import { cn } from "@/lib/utils";
 import type { Club, ClubEventType, ClubEventWithClub } from "@/lib/types";
 
@@ -18,12 +18,6 @@ const COLORS: Record<ClubEventType, string> = {
   team_meeting: "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
   other: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
 };
-const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", {
-  timeZone: CLUB_TIME_ZONE, hour: "2-digit", minute: "2-digit",
-});
-const fullDate = (iso: string) => new Date(iso).toLocaleString("mn-MN", {
-  timeZone: CLUB_TIME_ZONE, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-});
 
 export function ClubEventsCalendar({ events, clubs, isAdmin, today }: {
   events: ClubEventWithClub[];

@@ -1,0 +1,9 @@
+import { calendarDay, CLUB_TIME_ZONE } from "@/lib/club-event-calendar";
+
+export type PlayerEvent = { id: string; name: string; event_type: string; start_at: string; end_at: string; location: string | null; description: string | null };
+const types: Record<string, string> = { gym_prep: "Заалны бэлтгэл", fitness_prep: "Фитнесс", team_meeting: "Багийн уулзалт", other: "Бусад" };
+const time = (value: string) => new Date(value).toLocaleTimeString("en-GB", { timeZone: CLUB_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+export function ScheduleList({ events, now }: { events: PlayerEvent[]; now: number }) {
+  if (!events.length) return <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Ойрын хуваарьт event алга.</p>;
+  return <div className="space-y-3">{events.map(event => <article key={event.id} className="flex items-start gap-4 rounded-2xl border bg-card p-4"><div className="flex w-14 shrink-0 flex-col items-center rounded-xl bg-emerald-600/10 py-2 text-emerald-700 dark:text-emerald-300"><span className="text-[10px]">{calendarDay(event.start_at).slice(0, 7)}</span><b className="text-2xl">{calendarDay(event.start_at).slice(8)}</b></div><div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">{types[event.event_type] ?? event.event_type}{Date.parse(event.start_at) <= now && Date.parse(event.end_at) > now && " · Яг одоо"}</p><h3 className="mt-1 break-words font-semibold">{event.name}</h3><p className="mt-2 text-sm">{time(event.start_at)} – {calendarDay(event.end_at) !== calendarDay(event.start_at) ? `${calendarDay(event.end_at)} ` : ""}{time(event.end_at)} · {event.location || "Байршил оруулаагүй"}</p>{event.description && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{event.description}</p>}</div></article>)}</div>;
+}

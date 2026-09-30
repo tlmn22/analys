@@ -5,6 +5,9 @@ import { XIcon } from "lucide-react";
 import { extractVideoId } from "@/lib/youtube";
 import { useYouTubePlayer } from "../use-youtube-player";
 import type { ClipEvent } from "./clip-events";
+import { EventPackagePicker } from "@/components/admin/event-package-picker";
+
+import { useReportReadOnly } from "./report-permissions";
 
 const SPEEDS = [0.2, 0.5, 1, 3];
 // Jump to a few seconds before the tagged moment so the lead-up to the play
@@ -32,11 +35,14 @@ export function ClipModal({
   defenseClips?: ClipEvent[];
   onClose: () => void;
 }) {
+  const readOnly = useReportReadOnly();
   const videoId = extractVideoId(videoUrl);
   const { containerRef, play, pause, seekTo, setRate } = useYouTubePlayer(videoId);
   const [speed, setSpeed] = useState(1);
   const [filter, setFilter] = useState<"all" | "offense" | "defense">("all");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [marked, setMarked] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const hasFilter = !!offenseClips || !!defenseClips;
   const clipsFor = (f: "all" | "offense" | "defense") =>
@@ -61,6 +67,8 @@ export function ClipModal({
   }, [onClose]);
 
   function changeFilter(f: "all" | "offense" | "defense") {
+    if (bulkBusy) return;
+    setMarked(new Set());
     setFilter(f);
     setActiveIndex(0);
     const next = clipsFor(f);
@@ -109,10 +117,16 @@ export function ClipModal({
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div className="flex w-80 shrink-0 flex-col overflow-y-auto border-r border-border p-2">
+            {!readOnly && <div className="mb-3 space-y-2 border-b pb-3">
+              <div className="flex items-center justify-between text-xs"><label className="flex items-center gap-2"><input type="checkbox" disabled={bulkBusy || !visibleClips.length} checked={visibleClips.length > 0 && visibleClips.every(c => marked.has(c.id))} onChange={e => setMarked(e.target.checked ? new Set(visibleClips.map(c => c.id)) : new Set())} />Бүгдийг сонгох</label><button type="button" disabled={bulkBusy || !marked.size} onClick={() => setMarked(new Set())} className="underline disabled:opacity-40">Цэвэрлэх</button></div>
+              <p className="text-xs text-muted-foreground">{marked.size} event сонгосон · Шүүлтүүр солиход сонголт цэвэрлэгдэнэ</p>
+              {marked.size > 0 && <EventPackagePicker eventIds={visibleClips.filter(c => marked.has(c.id)).map(c => c.id)} label={`${marked.size} event`} onBusyChange={setBulkBusy} />}
+            </div>}
             {visibleClips.length === 0 && <p className="p-2 text-sm text-muted-foreground">Event олдсонгүй.</p>}
             {visibleClips.map((c, i) => (
+              <div key={c.id} className="flex items-center gap-2">
+              {!readOnly && <input type="checkbox" aria-label={`Багцад сонгох: Q${c.period} ${c.clockLabel} ${c.label}`} checked={marked.has(c.id)} disabled={bulkBusy} onChange={e => setMarked(previous => { const next = new Set(previous); if (e.target.checked) next.add(c.id); else next.delete(c.id); return next; })} />}
               <button
-                key={c.id}
                 onClick={() => playClip(i)}
                 className={`mb-1 flex items-center gap-1.5 rounded px-2 py-1 text-left text-xs hover:bg-muted ${
                   i === activeIndex ? "bg-muted" : ""
@@ -128,6 +142,7 @@ export function ClipModal({
                   {c.label}
                 </span>
               </button>
+              </div>
             ))}
             {visibleClips.length > 0 && (
               <button
@@ -141,6 +156,7 @@ export function ClipModal({
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+            {!readOnly && visibleClips[activeIndex] && <div className="max-h-[45vh] shrink-0 overflow-y-auto"><EventPackagePicker key={visibleClips[activeIndex].id} eventId={visibleClips[activeIndex].id} label={`Q${visibleClips[activeIndex].period} ${visibleClips[activeIndex].clockLabel} · ${visibleClips[activeIndex].label}`} /></div>}
             <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-border bg-black">
               {videoId ? (
                 <div ref={containerRef} className="absolute inset-0 h-full w-full" />
