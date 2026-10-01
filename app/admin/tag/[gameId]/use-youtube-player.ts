@@ -5,6 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 interface YTPlayer {
   playVideo(): void;
   pauseVideo(): void;
+  mute(): void;
+  unMute(): void;
+  getIframe(): HTMLIFrameElement;
   seekTo(seconds: number, allowSeekAhead: boolean): void;
   setPlaybackRate(rate: number): void;
   getCurrentTime(): number;
@@ -74,6 +77,8 @@ export function useYouTubePlayer(videoId: string | null) {
         playerVars: { playsinline: 1, controls: 1, rel: 0 },
         events: {
           onReady: () => {
+            const iframe = playerRef.current?.getIframe();
+            iframe?.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
             if (!cancelled) setReady(true);
           },
           onStateChange: (e) => {
@@ -102,6 +107,12 @@ export function useYouTubePlayer(videoId: string | null) {
   const pause = useCallback(() => {
     if (typeof playerRef.current?.pauseVideo === "function") playerRef.current.pauseVideo();
   }, []);
+  const mute = useCallback(() => {
+    if (typeof playerRef.current?.mute === "function") playerRef.current.mute();
+  }, []);
+  const unmute = useCallback(() => {
+    if (typeof playerRef.current?.unMute === "function") playerRef.current.unMute();
+  }, []);
   const seekTo = useCallback((seconds: number) => {
     if (typeof playerRef.current?.seekTo === "function") {
       playerRef.current.seekTo(Math.max(0, seconds), true);
@@ -119,5 +130,5 @@ export function useYouTubePlayer(videoId: string | null) {
   }, []);
 
   const getDuration = useCallback(() => typeof playerRef.current?.getDuration === "function" ? playerRef.current.getDuration() : 0, []);
-  return { containerRef, playing, ready, play, pause, seekTo, setRate, getCurrentTime, getDuration };
+  return { containerRef, playing, ready, play, pause, mute, unmute, seekTo, setRate, getCurrentTime, getDuration };
 }

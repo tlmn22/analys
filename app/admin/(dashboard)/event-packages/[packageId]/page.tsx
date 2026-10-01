@@ -1,3 +1,5 @@
+import { loadPackageViewReport } from "@/app/package-view-report";
+import { PackageViewReport } from "@/components/admin/package-view-report";
 import { clubPackageIds } from "@/lib/club-package-access";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -27,11 +29,13 @@ export default async function EventPackagePage({ params, searchParams }: {
   if (pack.error || items.error) return <p role="alert" className="text-destructive">Багцыг ачаалж чадсангүй: {pack.error?.message ?? items.error?.message}</p>;
   if (!pack.data) notFound();
   const recipients = isAdmin ? await loadPackageRecipients(packageId) : null;
+  const viewReport = await loadPackageViewReport(packageId);
   const clips = (items.data ?? []) as unknown as PackageClip[];
   return <div className="space-y-5">
     <Link href="/admin/event-packages" className="text-sm text-emerald-600 hover:underline">← Бүх багц</Link>
     <header><h1 className="break-words text-2xl font-semibold">{pack.data.name}</h1><p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{pack.data.description}</p><p className="mt-2 text-xs text-muted-foreground">{items.count ?? 0} event · Өөр өөр тоглолтын бичлэгүүдийг үзэх боломжтой</p></header>
     <PackageViewer key={`${packageId}:${page}`} clips={clips} showReports={isAdmin} membersPanel={recipients ? <PackageAssignment packageId={packageId} initialData={recipients.members ? recipients : undefined} initialError={recipients.error} /> : undefined} />
+    <PackageViewReport data={viewReport.data} error={viewReport.error} />
     <div className="flex justify-between text-sm">{page > 1 ? <Link href={`?page=${page - 1}`}>← Өмнөх 100</Link> : <span />}{page * 100 < (items.count ?? 0) && <Link href={`?page=${page + 1}`}>Дараах 100 →</Link>}</div>
   </div>;
 }
