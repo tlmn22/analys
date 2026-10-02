@@ -77,8 +77,8 @@ export function ClubEventAttendanceForm({ eventId, rows, description }: { eventI
           <thead>
             <tr className="border-b bg-muted/40 text-left">
               <th className="px-3 py-2 font-medium">Нэр</th>
-              <th className="px-3 py-2 font-medium">Эрх</th>
-              <th className="w-48 px-3 py-2 font-medium">Ирц</th>
+              <th className="hidden px-3 py-2 font-medium sm:table-cell">Эрх</th>
+              <th className="w-36 px-3 sm:w-48 py-2 font-medium">Ирц</th>
             </tr>
           </thead>
           <tbody>
@@ -91,8 +91,8 @@ export function ClubEventAttendanceForm({ eventId, rows, description }: { eventI
             )}
             {rows.map((row) => (
               <tr key={row.staffId} className="border-b last:border-b-0">
-                <td className="px-3 py-2 font-medium">{row.name}</td>
-                <td className="px-3 py-2 text-muted-foreground">{ROLE_LABELS[row.role]}</td>
+                <td className="px-3 py-2 font-medium">{row.name}<span className="mt-1 block text-xs font-normal text-muted-foreground sm:hidden">{ROLE_LABELS[row.role]}</span></td>
+                <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">{ROLE_LABELS[row.role]}</td>
                 <td className="px-3 py-2">
                   <Select
                     name={`status__${row.staffId}`}

@@ -64,7 +64,7 @@ export function ClubStaffFormDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{staff ? "Ажилтан засах" : "Шинэ ажилтан бүртгэх"}</DialogTitle>
         </DialogHeader>
@@ -89,7 +89,7 @@ export function ClubStaffFormDialog({
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="first_name">Нэр</Label>
               <Input id="first_name" name="first_name" defaultValue={staff?.first_name} required />

@@ -67,7 +67,7 @@ export function ClubEventFormDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{event ? "Эвент засах" : "Шинэ эвент зарлах"}</DialogTitle>
         </DialogHeader>
@@ -122,7 +122,7 @@ export function ClubEventFormDialog({
             <Input id="location" name="location" defaultValue={event?.location ?? ""} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="start_at">Эхлэх огноо</Label>
               <Input

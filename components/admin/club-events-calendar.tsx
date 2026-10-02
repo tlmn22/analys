@@ -55,21 +55,22 @@ export function ClubEventsCalendar({ events, clubs, isAdmin, today }: {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <div className="min-w-[640px]">
+          <div className="min-w-0">
             <div className="grid grid-cols-7 border-b bg-muted/40">
-              {WEEKDAYS.map((day) => <div key={day} className="py-3 text-center text-xs font-medium text-muted-foreground">{day}</div>)}
+              {WEEKDAYS.map((day) => <div key={day} className="py-3 text-center text-xs font-medium text-muted-foreground"><span className="sm:hidden">{day.slice(0, 2)}</span><span className="hidden sm:inline">{day}</span></div>)}
             </div>
             <div className="grid grid-cols-7">
               {days.map((day, index) => {
                 const items = dayEvents.get(day) ?? [];
                 const selected = day === selectedDay;
                 return (
-                  <div key={day} className={cn("min-h-32 min-w-0 border-b p-2", index % 7 !== 6 && "border-r", !day.startsWith(month) && "bg-muted/30", selected && "bg-blue-500/5 ring-2 ring-inset ring-blue-500/40")}>
+                  <div key={day} className={cn("min-h-24 min-w-0 border-b p-1 sm:min-h-32 sm:p-2", index % 7 !== 6 && "border-r", !day.startsWith(month) && "bg-muted/30", selected && "bg-blue-500/5 ring-2 ring-inset ring-blue-500/40")}>
                     <button type="button" onClick={() => setSelectedDay(day)} aria-pressed={selected} aria-label={`${day} — ${items.length} эвент`} aria-current={day === today ? "date" : undefined}
-                      className={cn("mb-1 flex size-7 items-center justify-center rounded-full text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-blue-500", day === today ? "bg-blue-600 text-white hover:bg-blue-700" : !day.startsWith(month) && "text-muted-foreground")}>
+                      className={cn("mb-1 flex h-9 w-full sm:size-7 items-center justify-center rounded-full text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-blue-500", day === today ? "bg-blue-600 text-white hover:bg-blue-700" : !day.startsWith(month) && "text-muted-foreground")}>
                       {Number(day.slice(8))}
                     </button>
-                    <div className="flex flex-col gap-1">
+                    {items.length > 0 && <button type="button" onClick={() => setSelectedDay(day)} aria-label={`${day} — ${items.length} эвент харах`} className="flex min-h-9 w-full flex-col items-center justify-center gap-1 rounded bg-blue-500/10 text-[10px] text-blue-700 dark:text-blue-300 sm:hidden"><span>{items.length}</span><span>эвент</span></button>}
+                    <div className="hidden flex-col gap-1 sm:flex">
                       {items.slice(0, 3).map((event) => (
                         <Link key={event.id} href={`/admin/club-events/${event.id}/attendance`}
                           title={`${event.name} · ${event.club?.name ?? ""} · ${fullDate(event.start_at)}`}
@@ -95,7 +96,7 @@ export function ClubEventsCalendar({ events, clubs, isAdmin, today }: {
         {selectedEvents.length === 0 && <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Энэ өдөр эвент зарлагдаагүй байна. Календарийн өөр өдрийг сонгож болно.</p>}
         {selectedEvents.map((event) => (
           <article key={event.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border p-4">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Link href={`/admin/club-events/${event.id}/attendance`} className="font-semibold hover:text-blue-500 hover:underline">{event.name}</Link>
                 <span className={cn("rounded-full border px-2 py-0.5 text-[11px]", COLORS[event.event_type])}>{EVENT_TYPE_LABELS[event.event_type]}</span>

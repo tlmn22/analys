@@ -30,8 +30,8 @@ export default async function DashboardLayout({
     club = team.data?.name ?? "Клуб";
   }
   return (
-    <div className="flex min-h-screen flex-1">
-      <aside className="flex w-60 shrink-0 flex-col border-r bg-muted/20 p-4">
+    <div className="flex min-h-dvh min-w-0 flex-1">
+      <aside className="hidden w-60 shrink-0 flex-col lg:flex border-r bg-muted/20 p-4">
         <div className="mb-6 flex items-center gap-2 px-2">
           <Image
             src="/favicon.png"
@@ -48,7 +48,7 @@ export default async function DashboardLayout({
       </aside>
       <div className="min-w-0 flex-1">
         <AdminNavbar name={name} role={role} club={club} isAdmin={editor.role === "superadmin"} />
-        <main className="p-4 sm:p-6">{children}</main>
+        <main className="min-w-0 p-3 sm:p-6">{children}</main>
       </div>
     </div>
   );

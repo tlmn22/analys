@@ -36,14 +36,14 @@ export default async function ClubEventsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-semibold">Клубын эвентүүд</h1>
           <p className="text-sm text-muted-foreground">
             Тоглогч, ажилтнуудын ирц болон эвентийн тайлбарыг бүртгэнэ. Нийт {events.length} эвент зарлагдсан.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" nativeButton={false} render={<Link href="/admin/club-reports" />}>Ирцийн тайлан</Button>
         <ClubEventFormDialog
           clubs={clubs}

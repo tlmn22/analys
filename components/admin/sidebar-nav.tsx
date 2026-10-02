@@ -36,7 +36,7 @@ export const scoutingNavItems = [
   { href: "/admin/event-packages", label: "Videos", icon: FolderOpenIcon },
 ];
 
-export function SidebarNav({ eventsOnly = false }: { eventsOnly?: boolean }) {
+export function SidebarNav({ eventsOnly = false, onNavigate }: { eventsOnly?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const groups = eventsOnly
     ? [clubNavItems.filter(item => item.href !== "/admin/clubs"), scoutingNavItems]
@@ -61,8 +61,10 @@ export function SidebarNav({ eventsOnly = false }: { eventsOnly?: boolean }) {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
             className={cn(
-              "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-muted",
+              "flex items-center gap-2 rounded-lg px-2.5 py-3 text-sm lg:py-2 transition-colors hover:bg-muted",
               active
                 ? "bg-muted font-medium text-foreground"
                 : "text-muted-foreground"
