@@ -9,7 +9,6 @@ import type {
   Team,
   Player,
 } from "@/lib/types";
-import { GAME_TYPES } from "@/lib/types";
 import {
   Table,
   TableHeader,
@@ -24,12 +23,9 @@ import { AddTeamToSeasonDialog } from "@/components/admin/add-team-to-season-dia
 import { RosterDialog } from "@/components/admin/roster-dialog";
 import { GameFormDialog } from "@/components/admin/game-form-dialog";
 import { DeleteButton } from "@/components/admin/delete-button";
-import { removeTeamFromSeason, deleteGame } from "./actions";
-import { ArrowLeftIcon, PlusIcon, UsersIcon, PencilIcon, VideoIcon, FileBarChart2Icon } from "lucide-react";
-
-function gameTypeLabel(value: string) {
-  return GAME_TYPES.find((g) => g.value === value)?.label ?? value;
-}
+import { SeasonGamesTable } from "@/components/admin/season-games-table";
+import { removeTeamFromSeason } from "./actions";
+import { ArrowLeftIcon, PlusIcon, UsersIcon } from "lucide-react";
 
 export default async function SeasonDetailPage({
   params,
@@ -71,11 +67,11 @@ export default async function SeasonDetailPage({
     db
       .from("games")
       .select(
-        "*, home_team:teams!games_home_team_id_fkey(id,name), visitor_team:teams!games_visitor_team_id_fkey(id,name)"
+        "*, home_team:teams!games_home_team_id_fkey(id,name), visitor_team:teams!games_visitor_team_id_fkey(id,name), game_events(count)"
       )
       .eq("season_id", id)
       .order("game_date", { ascending: true, nullsFirst: false })
-      .returns<GameWithTeams[]>(),
+      .returns<(GameWithTeams & { game_events: { count: number }[] })[]>(),
   ]);
 
   const queryError =
@@ -87,7 +83,10 @@ export default async function SeasonDetailPage({
   const seasonTeams = teamsRes.data ?? [];
   const allTeams = allTeamsRes.data ?? [];
   const allPlayers = allPlayersRes.data ?? [];
-  const games = gamesRes.data ?? [];
+  const games = (gamesRes.data ?? []).map(({ game_events, ...game }) => ({
+    ...game,
+    eventCount: game_events[0]?.count ?? 0,
+  }));
 
   const seasonTeamIds = seasonTeams.map((st) => st.id);
   const { data: rosterRows } = seasonTeamIds.length
@@ -229,81 +228,7 @@ export default async function SeasonDetailPage({
             Тоглолт үүсгэхийн тулд наад зах нь 2 баг бүртгэнэ үү.
           </p>
         )}
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Огноо</TableHead>
-                <TableHead>Home</TableHead>
-                <TableHead>Visitor</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="w-24 text-right">Үйлдэл</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {games.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                    Тоглолт үүсгэгдээгүй байна
-                  </TableCell>
-                </TableRow>
-              )}
-              {games.map((game) => (
-                <TableRow key={game.id}>
-                  <TableCell>
-                    {game.game_date
-                      ? new Date(game.game_date).toLocaleString("mn-MN")
-                      : "—"}
-                  </TableCell>
-                  <TableCell>
-                    {game.home_team.name}
-                    {game.home_team_color ? ` (${game.home_team_color})` : ""}
-                  </TableCell>
-                  <TableCell>
-                    {game.visitor_team.name}
-                    {game.visitor_team_color ? ` (${game.visitor_team_color})` : ""}
-                  </TableCell>
-                  <TableCell>{game.location ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{gameTypeLabel(game.game_type)}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1">
-                      <Link href={`/admin/tag/${game.id}`}>
-                        <Button variant="ghost" size="icon-sm" title="Tag">
-                          <VideoIcon />
-                          <span className="sr-only">Tag</span>
-                        </Button>
-                      </Link>
-                      <Link href={`/admin/tag/${game.id}/reports`}>
-                        <Button variant="ghost" size="icon-sm" title="Reports">
-                          <FileBarChart2Icon />
-                          <span className="sr-only">Reports</span>
-                        </Button>
-                      </Link>
-                      <GameFormDialog
-                        seasonId={season.id}
-                        teams={seasonTeamOptions}
-                        game={game}
-                        trigger={
-                          <Button variant="ghost" size="icon-sm">
-                            <PencilIcon />
-                            <span className="sr-only">Засах</span>
-                          </Button>
-                        }
-                      />
-                      <DeleteButton
-                        action={deleteGame.bind(null, game.id, season.id)}
-                        confirmText="Энэ тоглолтыг устгах уу?"
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <SeasonGamesTable seasonId={season.id} games={games} teams={seasonTeamOptions} />
       </div>
     </div>
   );
