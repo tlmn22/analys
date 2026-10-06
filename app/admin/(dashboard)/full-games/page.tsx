@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PlayIcon, VideoOffIcon } from "lucide-react";
+import { VideoOffIcon } from "lucide-react";
 import { getEventEditor } from "@/lib/club-event-access";
 import { FULL_GAME_SEASON_ID } from "@/lib/scouting-access";
 import { supabaseAdmin } from "@/lib/supabase/server";
@@ -47,7 +47,8 @@ export default async function FullGamesPage({ searchParams }: { searchParams: Pr
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const games = (gamesRes.data ?? []) as GameRow[];
   const selectedTeam = uuid.test(one("team")) ? teamById.get(one("team")) : undefined;
-  const teamGames = selectedTeam ? games.filter((g) => g.home_team_id === selectedTeam.id || g.visitor_team_id === selectedTeam.id) : [];
+  // No team picked shows every game of the season.
+  const teamGames = selectedTeam ? games.filter((g) => g.home_team_id === selectedTeam.id || g.visitor_team_id === selectedTeam.id) : games;
   const videoCount = (teamId: string) => games.filter((g) => g.video_url && (g.home_team_id === teamId || g.visitor_team_id === teamId)).length;
 
   // Final scores from tagged points; games not tagged yet show no score.
@@ -66,9 +67,44 @@ export default async function FullGamesPage({ searchParams }: { searchParams: Pr
     }
   }
 
-  const playing = teamGames.find((g) => g.id === one("v") && g.video_url);
-  const playingId = playing?.video_url ? extractVideoId(playing.video_url) : null;
-  const href = (team: string, video?: string) => `/admin/full-games?team=${team}${video ? `&v=${video}#player` : ""}`;
+  const href = (team?: string) => (team ? `/admin/full-games?team=${team}` : "/admin/full-games");
+  const withVideo = teamGames.filter((g) => g.video_url);
+  const withoutVideo = teamGames.filter((g) => !g.video_url);
+  const gameNumber = new Map(teamGames.map((g, i) => [g.id, i + 1]));
+
+  function GameCaption({ game }: { game: GameRow }) {
+    const score = scores.get(game.id);
+    const day = game.game_date ? calendarDay(game.game_date) : null;
+    const when = day ? `${day} · ${WEEKDAYS[new Date(`${day}T00:00:00Z`).getUTCDay()]} · ${calendarTime(game.game_date!)}` : "Огноо товлоогүй";
+    const number = <span className="w-6 shrink-0 font-mono text-xs text-muted-foreground">{gameNumber.get(game.id)}</span>;
+    if (!selectedTeam) {
+      const home = teamById.get(game.home_team_id);
+      const visitor = teamById.get(game.visitor_team_id);
+      return <div className="flex items-center gap-3">
+        {number}
+        <Logo team={home} size={28} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{home?.name ?? "Home"} <span className="text-muted-foreground">vs</span> {visitor?.name ?? "Visitor"}</span>
+          <span className="block text-xs text-muted-foreground">{when}</span>
+        </span>
+        {score && <span className="font-mono text-sm font-semibold tabular-nums">{score.get(game.home_team_id) ?? 0}–{score.get(game.visitor_team_id) ?? 0}</span>}
+        <Logo team={visitor} size={28} />
+      </div>;
+    }
+    const home = game.home_team_id === selectedTeam.id;
+    const opponent = teamById.get(home ? game.visitor_team_id : game.home_team_id);
+    const ours = score?.get(selectedTeam.id) ?? 0;
+    const theirs = score?.get(opponent?.id ?? "") ?? 0;
+    return <div className="flex items-center gap-3">
+      {number}
+      <Logo team={opponent} size={32} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium">{home ? "vs" : "@"} {opponent?.name ?? "Өрсөлдөгч"}</span>
+        <span className="block text-xs text-muted-foreground">{when} · {home ? "Home" : "Away"}</span>
+      </span>
+      {score && <span className={cn("font-mono text-sm font-semibold tabular-nums", ours > theirs ? "text-emerald-600" : ours < theirs ? "text-red-600" : "")}>{ours}–{theirs}</span>}
+    </div>;
+  }
 
   return <div className="space-y-6">
     <header>
@@ -76,62 +112,55 @@ export default async function FullGamesPage({ searchParams }: { searchParams: Pr
       <p className="mt-2 text-sm text-muted-foreground">{season.data?.name ?? "Улирал"} · Багаа сонгоод тоглолтын бүтэн бичлэгийг үзээрэй.</p>
     </header>
 
-    <nav aria-label="Багууд" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <nav aria-label="Багууд" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      <Link href={href()} aria-current={!selectedTeam ? "page" : undefined}
+        className={cn("flex w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border bg-card p-2 text-center transition-colors hover:border-emerald-600 lg:min-w-0 lg:flex-1",
+          !selectedTeam && "border-emerald-600 ring-2 ring-emerald-600/30")}>
+        <span className="flex size-8 items-center justify-center rounded-md bg-muted text-xs font-bold">ALL</span>
+        <span className="text-[11px] font-medium leading-tight">Бүгд</span>
+        <span className="text-[10px] text-muted-foreground">{games.filter((g) => g.video_url).length} бичлэг</span>
+      </Link>
       {teams.map((team) => {
         const active = team.id === selectedTeam?.id;
-        return <Link key={team.id} href={href(team.id)} aria-current={active ? "page" : undefined}
-          className={cn("flex flex-col items-center gap-2 rounded-xl border bg-card p-4 text-center transition-colors hover:border-emerald-600",
+        return <Link key={team.id} href={href(team.id)} aria-current={active ? "page" : undefined} title={team.name}
+          className={cn("flex w-20 shrink-0 flex-col items-center gap-1 rounded-lg border bg-card p-2 text-center transition-colors hover:border-emerald-600 lg:min-w-0 lg:flex-1",
             active && "border-emerald-600 ring-2 ring-emerald-600/30")}>
-          <Logo team={team} size={56} />
-          <span className="text-sm font-medium leading-tight">{team.name}</span>
-          <span className="text-xs text-muted-foreground">{videoCount(team.id)} бичлэг</span>
+          <Logo team={team} size={32} />
+          <span className="line-clamp-2 text-[11px] font-medium leading-tight">{team.name}</span>
+          <span className="text-[10px] text-muted-foreground">{videoCount(team.id)} бичлэг</span>
         </Link>;
       })}
-      {!teams.length && <p className="col-span-full text-sm text-muted-foreground">Энэ улиралд баг бүртгэгдээгүй байна.</p>}
+      {!teams.length && <p className="text-sm text-muted-foreground">Энэ улиралд баг бүртгэгдээгүй байна.</p>}
     </nav>
 
-    {selectedTeam && <section aria-label={`${selectedTeam.name} тоглолтууд`} className="space-y-4">
-      <h2 className="flex items-center gap-3 text-lg font-semibold"><Logo team={selectedTeam} size={32} />{selectedTeam.name} — тоглолтууд</h2>
+    <section aria-label={`${selectedTeam?.name ?? "Бүх"} тоглолтууд`} className="space-y-4">
+      <h2 className="flex items-center gap-3 text-lg font-semibold">
+        {selectedTeam ? <><Logo team={selectedTeam} size={28} />{selectedTeam.name}</> : "Бүх тоглолт"}
+        <span className="text-sm font-normal text-muted-foreground">{withVideo.length} бичлэг · {teamGames.length} тоглолт</span>
+      </h2>
 
-      {playing && <div id="player" className="scroll-mt-20 overflow-hidden rounded-xl border bg-black">
-        {playingId
-          ? <iframe key={playing.id} title="Тоглолтын бичлэг" className="aspect-video w-full" src={`https://www.youtube.com/embed/${playingId}?rel=0&playsinline=1&autoplay=1`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-          : <p className="p-8 text-center text-sm text-white">YouTube холбоос буруу байна. <a href={playing.video_url!} target="_blank" rel="noreferrer" className="underline">Шууд нээх</a></p>}
+      {!teamGames.length && <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Тоглолт бүртгэгдээгүй байна.</p>}
+
+      {withVideo.length > 0 && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        {withVideo.map((game) => {
+          const videoId = extractVideoId(game.video_url!);
+          return <article key={game.id} className="overflow-hidden rounded-xl border bg-card">
+            <div className="p-2 text-sm"><GameCaption game={game} /></div>
+            {videoId
+              ? <iframe title={`Тоглолт ${gameNumber.get(game.id)}`} className="aspect-video w-full bg-black" loading="lazy"
+                  src={`https://www.youtube.com/embed/${videoId}?rel=0&playsinline=1`}
+                  allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+              : <p className="bg-black p-8 text-center text-sm text-white">YouTube холбоос буруу байна. <a href={game.video_url!} target="_blank" rel="noreferrer" className="underline">Шууд нээх</a></p>}
+          </article>;
+        })}
       </div>}
 
-      {!teamGames.length ? <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Тоглолт бүртгэгдээгүй байна.</p>
-        : <ol className="grid gap-2 md:grid-cols-2">
-          {teamGames.map((game, index) => {
-            const home = game.home_team_id === selectedTeam.id;
-            const opponent = teamById.get(home ? game.visitor_team_id : game.home_team_id);
-            const score = scores.get(game.id);
-            const ours = score?.get(selectedTeam.id) ?? 0;
-            const theirs = score?.get(opponent?.id ?? "") ?? 0;
-            const day = game.game_date ? calendarDay(game.game_date) : null;
-            const content = <>
-              <span className="w-6 shrink-0 font-mono text-xs text-muted-foreground">{index + 1}</span>
-              <Logo team={opponent} size={36} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{home ? "vs" : "@"} {opponent?.name ?? "Өрсөлдөгч"}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {day ? `${day} · ${WEEKDAYS[new Date(`${day}T00:00:00Z`).getUTCDay()]} · ${calendarTime(game.game_date!)}` : "Огноо товлоогүй"} · {home ? "Home" : "Away"}
-                </span>
-              </span>
-              {score && <span className={cn("font-mono text-sm font-semibold tabular-nums", ours > theirs ? "text-emerald-600" : ours < theirs ? "text-red-600" : "")}>{ours}–{theirs}</span>}
-              {game.video_url
-                ? <span className="flex shrink-0 items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white"><PlayIcon className="size-3.5" />Үзэх</span>
-                : <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><VideoOffIcon className="size-3.5" />Бичлэггүй</span>}
-            </>;
-            const base = "flex items-center gap-3 rounded-xl border bg-card p-3";
-            return <li key={game.id}>
-              {game.video_url
-                ? <Link href={href(selectedTeam.id, game.id)} aria-current={playing?.id === game.id ? "true" : undefined}
-                    className={cn(base, "hover:border-emerald-600", playing?.id === game.id && "border-emerald-600 bg-emerald-600/5")}>{content}</Link>
-                : <div className={cn(base, "opacity-70")}>{content}</div>}
-            </li>;
-          })}
-        </ol>}
-    </section>}
+      {withoutVideo.length > 0 && <div className="space-y-2">
+        <h3 className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground"><VideoOffIcon className="size-4" />Бичлэг ороогүй тоглолтууд</h3>
+        <ol className="grid gap-2 md:grid-cols-2">
+          {withoutVideo.map((game) => <li key={game.id} className="rounded-xl border bg-card p-3 opacity-70"><GameCaption game={game} /></li>)}
+        </ol>
+      </div>}
+    </section>
   </div>;
 }
