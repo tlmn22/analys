@@ -15,6 +15,7 @@ import {
   ChartNoAxesCombinedIcon,
   ClipboardListIcon,
   EyeIcon,
+  TvIcon,
 } from "lucide-react";
 
 export const navItems = [
@@ -36,6 +37,7 @@ export const clubNavItems = [
 export const scoutingNavItems = [
   { href: "/admin/scouting-reports", label: "Scouting Reports", icon: ClipboardListIcon },
   { href: "/admin/event-packages", label: "Videos", icon: FolderOpenIcon },
+  { href: "/admin/full-games", label: "Full Game", icon: TvIcon },
 ];
 
 export function SidebarNav({ eventsOnly = false, onNavigate }: { eventsOnly?: boolean; onNavigate?: () => void }) {

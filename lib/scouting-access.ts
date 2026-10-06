@@ -7,6 +7,9 @@ export const SCOUTING_SEASON_IDS = [
   "ec947bce-d335-4781-8caa-9f71b3d5303c",
 ];
 
+/** Season whose full-game recordings the "Full Game" page lists (The League 2026-2027). */
+export const FULL_GAME_SEASON_ID = "ec947bce-d335-4781-8caa-9f71b3d5303c";
+
 export async function reportAccess(gameId: string) {
   const editor = await getEventEditor();
   if (!editor) return null;
