@@ -5,6 +5,7 @@
 // elsewhere in these reports for on-court lineups and offense/defense
 // possession. There's no explicit link between a set-tag and the shot it
 // produced, so this is an inferred attribution, not a stored fact.
+// Defensive rows count the opponent's possessions rather than calls.
 
 import type { RawEvent } from "../game-summary/summary-stats";
 import { computePossessions, type PossessionSegment } from "../game-summary/pace-stats";
@@ -20,6 +21,16 @@ const DEFENSE_SET_TYPES = new Set(["man_to_man", "zone", "press", "other_defense
 // keep inheriting "Transition"/"BLOB"/"SLOB" until the next explicit call.
 const SINGLE_POSSESSION_CATEGORIES = new Set(["transition", "blob", "slob"]);
 
+// Most teams play man-to-man nearly every trip, so tagging it on every
+// possession isn't practical — defense is assumed to be Half-court man until
+// the first explicit call, and each call stays in effect until replaced.
+const DEFAULT_DEFENSE_CATEGORY = "man_to_man";
+const DEFAULT_MAN_TO_MAN_TYPE = "Half-court man";
+
+// Event times are whole/fractional game-clock seconds; this only needs to sit
+// strictly between a trip's last event and anything later.
+const POSSESSION_END_EPSILON = 1e-3;
+
 export const OFFENSE_ROW_LABELS: Record<string, string> = {
   unassigned: "unassigned offense",
   set_offense: "Set Offense",
@@ -28,8 +39,8 @@ export const OFFENSE_ROW_LABELS: Record<string, string> = {
   slob: "SLOB",
 };
 
+// No "unassigned" row: untagged defense defaults to Man to Man.
 export const DEFENSE_ROW_LABELS: Record<string, string> = {
-  unassigned: "unassigned defense",
   man_to_man: "Man to Man",
   zone: "Zone",
   press: "Press",
@@ -146,17 +157,19 @@ export interface Segment {
  * `setTypes` — "current call until replaced" state. `categoryKey` decides
  * what each segment after a given tag is labeled (defaults to the tag's own
  * event type; the defense-detail breakdown below keys on the tag's specific
- * subtype instead). */
+ * subtype instead). `initialCategory` labels the stretch before the first
+ * call. */
 export function buildCategorySegments(
   inRange: RawEvent[],
   teamId: string,
   setTypes: Set<string>,
   categoryKey: (e: RawEvent) => string,
   start: number,
-  end: number
+  end: number,
+  initialCategory = "unassigned"
 ): Segment[] {
   const segments: Segment[] = [];
-  let currentCategory = "unassigned";
+  let currentCategory = initialCategory;
   let segStart = start;
   let currentTagEvent: RawEvent | null = null;
   for (const e of inRange) {
@@ -176,22 +189,40 @@ export function buildCategorySegments(
  * accumulation core behind both the top-level Offensive/Defensive Sets
  * table and the Defense detail breakdown. Categories are created in the map
  * on demand (not pre-seeded), so callers that need every known row present
- * even at zero sets should seed the map before merging these in. */
+ * even at zero sets should seed the map before merging these in.
+ *
+ * With `possessions`, "sets" counts the shooting team's possessions that end
+ * inside each segment (so a call made mid-trip covers that trip) instead of
+ * the number of calls, and "no outcome" is judged per possession. */
 export function accumulateSegmentTotals(
   segments: Segment[],
   inRange: RawEvent[],
   shootingTeam: string,
-  foulTeam: string
+  foulTeam: string,
+  possessions?: PossessionSegment[]
 ): Map<string, CategoryTotals> {
   const totalsByCategory = new Map<string, CategoryTotals>();
+  const isOutcome = (e: RawEvent) =>
+    OUTCOME_TYPES.has(e.eventType) && (e.teamId === shootingTeam || e.teamId === foulTeam);
 
   for (const seg of segments) {
     const segEvents = inRange.filter((e) => e.t >= seg.start && e.t < seg.end);
     const shots = segEvents.filter((e) => e.teamId === shootingTeam);
     const fouls = segEvents.filter((e) => e.teamId === foulTeam && e.eventType === "def_foul");
-    const hasOutcome = segEvents.some(
-      (e) => OUTCOME_TYPES.has(e.eventType) && (e.teamId === shootingTeam || e.teamId === foulTeam)
-    );
+    let sets = 1;
+    let noOutcomeSets = segEvents.some(isOutcome) ? 0 : 1;
+    if (possessions) {
+      const segPossessions = possessions.filter((p) => p.end > seg.start && p.end <= seg.end);
+      sets = segPossessions.length;
+      // Closed window so a zero-length opening trip still sees its own shot;
+      // only the shooting team's results (or the defense's fouls) count, so
+      // the previous trip's closing event at p.start can't leak in.
+      const isTripOutcome = (e: RawEvent) =>
+        e.eventType === "def_foul" ? e.teamId === foulTeam : e.teamId === shootingTeam && OUTCOME_TYPES.has(e.eventType);
+      noOutcomeSets = segPossessions.filter(
+        (p) => !inRange.some((e) => e.t >= p.start && e.t <= p.end && isTripOutcome(e))
+      ).length;
+    }
 
     const twoPt = shots.filter((e) => e.eventType === "2pt_made" || e.eventType === "2pt_miss");
     const threePt = shots.filter((e) => e.eventType === "3pt_made" || e.eventType === "3pt_miss");
@@ -202,7 +233,7 @@ export function accumulateSegmentTotals(
     const andOneEvents = scoring.filter((e) => e.andOne);
 
     const totals = totalsByCategory.get(seg.category) ?? emptyTotals(seg.category);
-    totals.sets += 1;
+    totals.sets += sets;
     totals.points += scoring.reduce((s, e) => s + (e.points ?? 0), 0);
     totals.fgm2 += twoPt.filter((e) => e.eventType === "2pt_made").length;
     totals.fga2 += twoPt.length;
@@ -213,8 +244,8 @@ export function accumulateSegmentTotals(
     totals.andOne += andOneEvents.length;
     totals.ftTrips += countFtTrips(segEvents, shootingTeam);
     totals.defFoul += fouls.length;
-    if (!hasOutcome) {
-      totals.noOutcomeSets += 1;
+    if (noOutcomeSets > 0) {
+      totals.noOutcomeSets += noOutcomeSets;
       if (seg.tagEvent) totals.events.noOutcome.push(seg.tagEvent);
     }
 
@@ -249,9 +280,12 @@ export function clipToSinglePossession(
   for (const seg of segments) {
     if (isSinglePossession(seg.category)) {
       const poss = possessions.find((p) => p.start <= seg.start && seg.start < p.end);
-      if (poss && poss.end < seg.end) {
-        clipped.push({ ...seg, end: poss.end });
-        clipped.push({ category: "unassigned", start: poss.end, end: seg.end, tagEvent: null });
+      // Segments are half-open, so cut just past poss.end: the made shot that
+      // ends the trip (and FTs at the same stopped clock) stays with the call.
+      const cut = poss ? poss.end + POSSESSION_END_EPSILON : Infinity;
+      if (poss && cut < seg.end) {
+        clipped.push({ ...seg, end: cut });
+        clipped.push({ category: "unassigned", start: cut, end: seg.end, tagEvent: null });
         continue;
       }
     }
@@ -285,7 +319,15 @@ export function computeSetCategoryTotals(
 
   const inRange = allEvents.filter((e) => e.t >= start && e.t <= end).sort((a, b) => a.t - b.t);
 
-  const segments = buildCategorySegments(inRange, teamId, setTypes, (e) => e.eventType, start, end);
+  const segments = buildCategorySegments(
+    inRange,
+    teamId,
+    setTypes,
+    (e) => e.eventType,
+    start,
+    end,
+    mode === "defense" ? DEFAULT_DEFENSE_CATEGORY : "unassigned"
+  );
 
   // Transition/BLOB/SLOB are single-possession calls — clip each one to the
   // possession it was tagged during (see clipToSinglePossession above).
@@ -300,11 +342,27 @@ export function computeSetCategoryTotals(
 
   const totalsByCategory = new Map<string, CategoryTotals>();
   for (const key of Object.keys(rowLabels)) totalsByCategory.set(key, emptyTotals(key));
-  for (const [key, totals] of accumulateSegmentTotals(clippedSegments, inRange, shootingTeam, foulTeam)) {
+  const possessions =
+    mode === "defense" ? defendedPossessions(allEvents, teamId, opponentTeamId, start, end) : undefined;
+  for (const [key, totals] of accumulateSegmentTotals(clippedSegments, inRange, shootingTeam, foulTeam, possessions)) {
     totalsByCategory.set(key, totals);
   }
 
   return Object.keys(rowLabels).map((key) => totalsByCategory.get(key)!);
+}
+
+/** The opponent's possessions (i.e. trips this team defended) that end
+ * inside the selected range. */
+function defendedPossessions(
+  allEvents: RawEvent[],
+  teamId: string,
+  opponentTeamId: string,
+  start: number,
+  end: number
+): PossessionSegment[] {
+  return computePossessions(allEvents, teamId, opponentTeamId).filter(
+    (p) => p.teamId === opponentTeamId && p.end > start && p.end <= end
+  );
 }
 
 export interface PlayNameRow {
@@ -369,9 +427,8 @@ export interface DefenseDetailRow {
  * to Man" split into Full-court man / Half-court man / ..., "Zone" into
  * 2-3 / 3-2 / ..., "Press" into 1-2-2 / 2-2-1 / ... — using each call's own
  * subtype field (man_to_man_type/zone_type/press_type) rather than just the
- * top-level event type. "Other Defense" has no subtype to split on and
- * "unassigned" (no call tagged) isn't a defense that was actually run, so
- * both are left out — this is purely "what specific defenses were called."
+ * top-level event type. "Other Defense" has no subtype to split on, so it
+ * is left out. Trips before the first call count as Half-court man.
  * Rows are grouped by top-level category (in DEFENSE_ROW_LABELS order),
  * most-called subtype first within each group.
  */
@@ -391,13 +448,29 @@ export function computeDefenseSetDetailRows(
     return `${e.eventType}::${sub}`;
   };
 
-  const segments = buildCategorySegments(inRange, teamId, DEFENSE_SET_TYPES, categoryKey, start, end);
-  const totalsByKey = accumulateSegmentTotals(segments, inRange, opponentTeamId, teamId);
+  const segments = buildCategorySegments(
+    inRange,
+    teamId,
+    DEFENSE_SET_TYPES,
+    categoryKey,
+    start,
+    end,
+    `${DEFAULT_DEFENSE_CATEGORY}::${DEFAULT_MAN_TO_MAN_TYPE}`
+  );
+  const totalsByKey = accumulateSegmentTotals(
+    segments,
+    inRange,
+    opponentTeamId,
+    teamId,
+    defendedPossessions(allEvents, teamId, opponentTeamId, start, end)
+  );
 
   const groupOrder = Object.keys(DEFENSE_ROW_LABELS);
   const rows: DefenseDetailRow[] = [];
   for (const [key, totals] of totalsByKey) {
     if (key === "unassigned" || key === "other_defense") continue;
+    // Default man-to-man stretch with no opponent trips (e.g. nothing tagged yet).
+    if (totals.sets === 0 && totals.events.setTag.length === 0) continue;
     const [category, sub] = key.split("::");
     rows.push({ key, label: `${DEFENSE_ROW_LABELS[category] ?? category} — ${sub}`, totals });
   }

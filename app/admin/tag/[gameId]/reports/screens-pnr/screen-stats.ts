@@ -152,7 +152,11 @@ export function computeActionRows(
   const totals = new Map<string, ActionCategoryTotals>();
 
   for (const poss of inRangePoss) {
-    const possEvents = events.filter((e) => e.t >= poss.start && e.t < poss.end);
+    // Closed window: the made shot / FT that ends the trip sits exactly at
+    // poss.end (and-one or trailing FTs share that clock time). The previous
+    // trip's closing event at poss.start is the other team's, so outcomes
+    // filtered to possTeamId below never pick it up.
+    const possEvents = events.filter((e) => e.t >= poss.start && e.t <= poss.end);
     const tags = possEvents.filter((e) => e.teamId === teamId && e.eventType === tagEventType && getValue(e));
     if (tags.length === 0) continue;
 

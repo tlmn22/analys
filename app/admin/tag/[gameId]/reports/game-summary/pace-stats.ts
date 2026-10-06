@@ -5,6 +5,17 @@
 // other team grabs a defensive rebound off their miss. An offensive
 // rebound explicitly does NOT end a possession — same team continues.
 
+import { DEFENSE, DEFENSE_TEAM_SETS } from "@/lib/tag-events";
+
+// Events tagged against the defending team — when one of these opens a
+// period (e.g. a Zone call before the first shot), the opponent has the ball.
+// Def Reb/Steal are left out: the loop below already hands them the ball.
+const DEF_SIDE_TYPES = new Set(
+  [...DEFENSE, ...DEFENSE_TEAM_SETS]
+    .filter((e) => e.side === "def" && e.type !== "def_reb" && e.type !== "steal")
+    .map((e) => e.type)
+);
+
 export interface PossessionSegment {
   teamId: string;
   start: number;
@@ -36,11 +47,14 @@ export function computePossessions(
     const sorted = [...periodEvents].sort((a, b) => a.t - b.t);
     if (!sorted.length) continue;
 
-    let currentTeam: string | null = sorted[0].teamId;
+    const first = sorted[0];
+    let currentTeam: string | null = DEF_SIDE_TYPES.has(first.eventType) ? other(first.teamId!) : first.teamId;
     let possStart = sorted[0].t;
 
     for (const e of sorted) {
-      if (e.eventType === "def_reb" && e.teamId && e.teamId !== currentTeam) {
+      // A steal hands the ball over just like a defensive rebound; a Turnover
+      // tagged for the same play is then ignored (no longer the current team).
+      if ((e.eventType === "def_reb" || e.eventType === "steal") && e.teamId && e.teamId !== currentTeam) {
         segments.push({ teamId: currentTeam!, start: possStart, end: e.t });
         currentTeam = e.teamId;
         possStart = e.t;
