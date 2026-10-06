@@ -31,7 +31,7 @@ export function ActionPanel({
       const events = live
         ? [...OFFENSE, ...DEFENSE, ...OTHER, ...OFFENSE_TEAM_SETS, ...DEFENSE_TEAM_SETS]
         : STOPPED;
-      const match = events.find((ev) => ev.key !== "" && ev.key === e.key);
+      const match = events.find((ev) => !ev.hidden && ev.key !== "" && ev.key === e.key);
       if (match) {
         e.preventDefault();
         onEventTriggered(match);
@@ -119,7 +119,7 @@ function EventSection({
       </div>
       {events.length > 0 && (
         <div className="grid grid-cols-2 gap-1.5">
-          {events.map((ev) => (
+          {events.filter((ev) => !ev.hidden).map((ev) => (
             <button
               key={ev.type}
               onClick={() => onPick(ev)}

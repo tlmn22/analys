@@ -10,6 +10,7 @@ import { EditEventModal, type UpdateEventFields } from "./edit-event-modal";
 import { EventsPanel } from "./events-panel";
 import { MoreEventsPanel } from "./more-events-panel";
 import { PlayerPickerPanel } from "./player-picker-panel";
+import { StealPanel } from "./steal-panel";
 import { PlayNamePanel } from "./play-name-panel";
 import { ShotDetailPanel } from "./shot-detail-panel";
 import { SubstitutionPanel } from "./substitution-panel";
@@ -661,7 +662,26 @@ export function TagWorkspace({
         {activePlayerEvent && supportsDecisionQuality(activePlayerEvent.type) && <div className="px-3 pt-3"><DecisionQualityPicker value={decisionQuality} onChange={setDecisionQuality} disabled={!decisionEnabled} /></div>}
         {benchSlot ? <PlayerPickerPanel title="Орох тоглогч" roster={team(benchSlot.teamId).roster.filter(p => !(lineup[benchSlot.teamId] ?? []).some(on => on?.playerId === p.playerId))}
           onCancel={cancelCapture} onDone={p => void handleSlotSet(benchSlot.teamId, benchSlot.slot, p)} />
-        : pickerState ? (
+        : pickerState?.event.type === "steal" ? (
+          <StealPanel
+            defenders={rosterForPicking(defTeamId)}
+            attackers={rosterForPicking(offTeamId)}
+            onCancel={cancelCapture}
+            onDone={(stealer, loser, turnoverType) => {
+              const stealDef = pickerState.event;
+              const turnoverDef = EDITABLE_EVENTS.find((e) => e.type === "turnover")!;
+              // Both commits flip Off/Def from the same pre-steal values, so the
+              // possession changes hands once even though two events are saved.
+              void runOperation(async () => {
+                await commit(stealDef, defTeamId, stealer, null);
+                if (loser) {
+                  await commit(turnoverDef, offTeamId, loser, null, undefined, null,
+                    turnoverType ? { type: turnoverType, modifiers: {} } : undefined);
+                }
+              });
+            }}
+          />
+        ) : pickerState ? (
           <PlayerPickerPanel
             key={pickerState.event.type}
             freeThrow={pickerState.event.type.startsWith("ft_")}
@@ -702,16 +722,23 @@ export function TagWorkspace({
             }
             config={typeModalState.event.typeDetail!}
             onCancel={cancelCapture}
-            onDone={(player, modifiers, type, secondPlayer, winner) => {
-              void runOperation(() => commit(
-                typeModalState.event,
-                teamIdForEvent(typeModalState.event, player),
-                player,
-                null,
-                undefined,
-                null,
-                { type, modifiers, secondPlayer, winner }
-              ));
+            onDone={(player, modifiers, type, secondPlayer, winner, followUpType) => {
+              const event = typeModalState.event;
+              const teamId = teamIdForEvent(event, player);
+              const followUpDef = event.typeDetail?.followUp
+                ? EDITABLE_EVENTS.find((e) => e.type === event.typeDetail!.followUp!.eventType)
+                : undefined;
+              void runOperation(async () => {
+                await commit(event, teamId, player, null, undefined, null, { type, modifiers, secondPlayer, winner });
+                // e.g. Screen -> Use/Reject: the receiver's Screen Received row, partnered with the screener.
+                if (followUpDef && followUpType && secondPlayer) {
+                  await commit(followUpDef, teamId, secondPlayer, null, undefined, null, {
+                    type: followUpType,
+                    modifiers: {},
+                    secondPlayer: player,
+                  });
+                }
+              });
             }}
           />
         ) : teamPickerState ? (

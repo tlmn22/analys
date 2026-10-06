@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import type { TypeDetailConfig } from "@/lib/tag-events";
 import { playerLabel, type RosterPlayer } from "./types";
 
-type Stage = "player" | "second" | "type" | "winner";
+type Stage = "player" | "second" | "type" | "winner" | "followUp";
 
 /** Shared panel: pick a player, optionally pick a second player (e.g. who
  * set the screen, or the opponent in a physical-contact pair), then pick a
  * type from a list of blue key-badged rows (matching the reference tool's
  * Turnover/Off Foul/Screen Set/Screen Received detail screens), with
  * optional "Alt + X" checkboxes above the list and an optional final
- * "who won?" stage. */
+ * "who won?" stage or a follow-up type for the second player. */
 export function TypeDetailPanel({
   eventLabel,
   roster,
@@ -39,10 +39,11 @@ export function TypeDetailPanel({
     modifierFields: Record<string, boolean>,
     type: string,
     secondPlayer: RosterPlayer | null,
-    winner: RosterPlayer | null
+    winner: RosterPlayer | null,
+    followUpType?: string | null
   ) => void;
 }) {
-  const { modifiers, types, otherLabel, secondPlayerLabel, pickWinner, typeFirst } = config;
+  const { modifiers, types, otherLabel, secondPlayerLabel, pickWinner, typeFirst, followUp } = config;
   const [stage, setStage] = useState<Stage>(typeFirst ? "type" : needsPlayer ? "player" : "type");
   const [player, setPlayer] = useState<RosterPlayer | null>(null);
   const [secondPlayer, setSecondPlayer] = useState<RosterPlayer | null>(null);
@@ -72,6 +73,9 @@ export function TypeDetailPanel({
     if (pickWinner && secondPlayer) {
       setPickedType(type);
       setStage("winner");
+    } else if (followUp && secondPlayer) {
+      setPickedType(type);
+      setStage("followUp");
     } else {
       onDone(player, checked, type, secondPlayer, null);
     }
@@ -121,6 +125,38 @@ export function TypeDetailPanel({
               {playerLabel(p)}
             </Button>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === "followUp" && followUp && secondPlayer) {
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto border-l border-border p-3">
+        <Button variant="outline" onClick={() => setStage("type")}>
+          ← Back
+        </Button>
+        <div className="text-sm font-semibold">
+          {eventLabel} ({pickedType}): {playerLabel(secondPlayer)} — {followUp.label}
+        </div>
+        <div className="flex flex-col gap-1">
+          {followUp.types.map((t, i) => (
+            <button
+              key={`${t.label}-${i}`}
+              onClick={() => onDone(player, checked, pickedType as string, secondPlayer, null, t.label)}
+              className="flex items-stretch overflow-hidden rounded-md text-left"
+            >
+              <span className="flex w-7 shrink-0 items-center justify-center bg-slate-800 text-[10px] font-bold text-white">
+                {t.key}
+              </span>
+              <span className="flex-1 bg-blue-500 px-3 py-2 text-center text-sm font-medium text-white hover:bg-blue-600">
+                {t.label}
+              </span>
+            </button>
+          ))}
+          <Button variant="secondary" onClick={() => onDone(player, checked, pickedType as string, secondPlayer, null, null)}>
+            Skip
+          </Button>
         </div>
       </div>
     );

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { SHOT_MODIFIERS, SHOT_TYPES_2PT, SHOT_TYPES_3PT } from "@/lib/tag-events";
 import { HalfCourtDiagram } from "./half-court-diagram";
 import { playerLabel, type RosterPlayer, type ShotDetails } from "./types";
@@ -43,7 +42,6 @@ export function ShotDetailPanel({
   const [modifiers, setModifiers] = useState<Record<string, boolean>>(() => Object.fromEntries(
     Object.keys(emptyModifiers()).map(key => [key, Boolean(initial?.details[key as keyof ShotDetails])])
   ));
-  const [shotQuality, setShotQuality] = useState(String(initial?.details.shotQuality ?? ""));
   const [shotType, setShotType] = useState<string | null>(initial?.details.shotType ?? null);
   const [shotX, setShotX] = useState<number | null>(initial?.details.shotX ?? null);
   const [shotY, setShotY] = useState<number | null>(initial?.details.shotY ?? null);
@@ -80,21 +78,19 @@ export function ShotDetailPanel({
   }
 
   function finish(defender: RosterPlayer | null) {
-    const parsedQuality = parseInt(shotQuality, 10);
-    const quality = Number.isFinite(parsedQuality)
-      ? Math.min(10, Math.max(1, parsedQuality))
-      : null;
     onDone(
       player as RosterPlayer,
       {
         andOne: isMade && !!modifiers.andOne,
-        badMiss: !isMade && !!modifiers.badMiss,
+        // Bad Miss / Late Clock / Shot Quality are no longer asked for (no
+        // report uses them); keep whatever an older tag already stored.
+        badMiss: !isMade && !!initial?.details.badMiss,
         contestedClose: !!modifiers.contestedClose,
-        lateClock: !!modifiers.lateClock,
+        lateClock: !!initial?.details.lateClock,
         lightlyContested: !!modifiers.lightlyContested,
         uncontested: !!modifiers.uncontested,
         wideOpen: !!modifiers.wideOpen,
-        shotQuality: quality,
+        shotQuality: initial?.details.shotQuality ?? null,
         shotType: shotType ?? "",
         shotX,
         shotY,
@@ -155,18 +151,6 @@ export function ShotDetailPanel({
                 {m.label}
               </label>
             ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-sm">Shot Quality (1-10):</span>
-            <Input
-              type="number"
-              min={1}
-              max={10}
-              value={shotQuality}
-              onChange={(e) => setShotQuality(e.target.value)}
-              className="h-8 w-16"
-            />
           </div>
 
           <div className="grid grid-cols-2 gap-1.5">

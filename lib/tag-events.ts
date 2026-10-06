@@ -46,6 +46,11 @@ export interface TypeDetailConfig {
   /** When set (requires secondPlayerLabel), adds a final "who won?" stage
    * after the type is picked, showing the two players by name. */
   pickWinner?: boolean;
+  /** When set (requires secondPlayerLabel), adds a final stage after the
+   * type that records a second event of `eventType` for the second player,
+   * with the first player as its partner (e.g. Screen -> Use/Reject saves
+   * a Screen Received row). Can be skipped to save only the first event. */
+  followUp?: { label: string; types: TypeOption[]; eventType: string };
 }
 
 export interface EventDef {
@@ -76,6 +81,9 @@ export interface EventDef {
    * SLOB) instead of a direct commit — every team calls different named
    * plays, so this isn't a fixed taxonomy like typeDetail's lists. */
   playNameDetail?: PlayNameConfig;
+  /** Left off the tagging buttons/shortcuts but still known for labels,
+   * colors and editing existing events. */
+  hidden?: boolean;
 }
 
 /** Config for the growable play-name panel: a per-game, per-category list
@@ -107,9 +115,7 @@ export const HELP_DEFENSE_TYPES: TypeOption[] = [
 
 export const SHOT_MODIFIERS: { field: string; label: string }[] = [
   { field: "andOne", label: "and 1" },
-  { field: "badMiss", label: "bad miss" },
   { field: "contestedClose", label: "contested (< 0.6 m.)" },
-  { field: "lateClock", label: "late clock" },
   { field: "lightlyContested", label: "lightly contested (< 1.2 m.)" },
   { field: "uncontested", label: "uncontested (< 1.8 m.)" },
   { field: "wideOpen", label: "wide open (> 1.8 m.)" },
@@ -219,15 +225,6 @@ export const HUSTLE_PLAY_TYPES: TypeOption[] = [
   { key: "", label: "Good Bump" },
 ];
 
-/** Outcome picked after a BLOB/SLOB play name, for per-play success-rate
- * reporting. */
-export const BLOB_SLOB_OUTCOMES: TypeOption[] = [
-  { key: "", label: "Score" },
-  { key: "", label: "No Score" },
-  { key: "", label: "Turnover" },
-  { key: "", label: "Continue Offense" },
-];
-
 /** Physical-contact type list, inspired by Roland Beech's research on
  * physical-battle impact on game outcomes. Picked after both players
  * involved, followed by a "who won?" stage. */
@@ -297,9 +294,12 @@ export const OFFENSE: EventDef[] = [
     color: "red",
     typeDetail: { otherLabel: "Other Off Foul", types: OFF_FOUL_TYPES, modifiers: OFF_FOUL_MODIFIERS },
   },
+  // One Screen tag covers both sides of the action: screener -> receiver ->
+  // screen type -> Use/Reject, saved as a Screen Set plus a matching Screen
+  // Received row so the screens report and older games read the same.
   {
     key: "",
-    label: "Screen Set",
+    label: "Screen",
     type: "screen_set",
     needsPlayer: true,
     side: "off",
@@ -308,6 +308,7 @@ export const OFFENSE: EventDef[] = [
       otherLabel: "Other Screen Set",
       types: SCREEN_SET_TYPES,
       secondPlayerLabel: "Who was the screen set for?",
+      followUp: { label: "Use or reject?", types: SCREEN_RCVD_TYPES, eventType: "screen_rcvd" },
     },
   },
   {
@@ -317,6 +318,8 @@ export const OFFENSE: EventDef[] = [
     needsPlayer: true,
     side: "off",
     color: "outline",
+    // Recorded by the Screen button above; kept for labels and editing.
+    hidden: true,
     typeDetail: {
       otherLabel: "Other Screen Received",
       types: SCREEN_RCVD_TYPES,
@@ -431,7 +434,7 @@ export const OFFENSE_TEAM_SETS: EventDef[] = [
     needsPlayer: false,
     side: "off",
     color: "blue",
-    playNameDetail: { category: "blob", outcomes: BLOB_SLOB_OUTCOMES },
+    playNameDetail: { category: "blob" },
   },
   {
     key: "L",
@@ -440,7 +443,7 @@ export const OFFENSE_TEAM_SETS: EventDef[] = [
     needsPlayer: false,
     side: "off",
     color: "blue",
-    playNameDetail: { category: "slob", outcomes: BLOB_SLOB_OUTCOMES },
+    playNameDetail: { category: "slob" },
   },
   {
     key: "",
@@ -560,9 +563,9 @@ export function findByKey(events: EventDef[], key: string): EventDef | undefined
 // deliberately excluded: a single free throw doesn't reliably mean the
 // trip is over (1-and-1, 2, or 3 shots all look the same as one FT tag).
 // Steal is included alongside Turnover so a live fast break after a steal
-// immediately shows the right team's roster — if an analyst tags both
-// Steal and Turnover for the same play, this flips twice and needs a
-// manual correction via the swap buttons (the accepted trade-off).
+// immediately shows the right team's roster. The Steal panel saves the
+// steal and the ball-loser's Turnover in one operation, flipping once;
+// tagging a separate Turnover button afterwards would still flip again.
 export const AUTO_FLIP_TYPES = new Set(["2pt_made", "3pt_made", "turnover", "steal", "def_reb"]);
 
 /** Flat list of event types that make sense to reassign via the "Edit
