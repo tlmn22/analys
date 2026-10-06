@@ -25,7 +25,7 @@ export default async function ScoutingReportPage({
     db
       .from("game_events")
       .select(
-        "id, video_time, period, clock_time, event_type, team_id, player_id, assist_player_id, points, and_one, set_offense_name, man_to_man_type, zone_type, press_type"
+        "id, video_time, period, clock_time, event_type, team_id, player_id, assist_player_id, points, and_one, set_offense_name, man_to_man_type, zone_type, press_type, def_coverage_type, boxout_type"
       )
       .eq("game_id", gameId),
     db
@@ -95,6 +95,8 @@ export default async function ScoutingReportPage({
     manToManType: e.man_to_man_type as string | null,
     zoneType: e.zone_type as string | null,
     pressType: e.press_type as string | null,
+    defCoverageType: e.def_coverage_type as string | null,
+    boxoutType: e.boxout_type as string | null,
   }));
 
   return (

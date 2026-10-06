@@ -58,6 +58,7 @@ export interface RawEvent {
   foulBadCall?: boolean;
   foulCorrectCall?: boolean;
   setOffenseName?: string | null;
+  boxoutType?: string | null;
 }
 
 export interface PeriodTotal {
