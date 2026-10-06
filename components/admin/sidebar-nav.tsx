@@ -14,6 +14,7 @@ import {
   CalendarCheckIcon,
   ChartNoAxesCombinedIcon,
   ClipboardListIcon,
+  EyeIcon,
 } from "lucide-react";
 
 export const navItems = [
@@ -21,6 +22,7 @@ export const navItems = [
   { href: "/admin/teams", label: "Багууд", icon: ShieldIcon },
   { href: "/admin/players", label: "Тоглогчид", icon: UsersIcon },
   { href: "/admin/seasons", label: "Улирлууд", icon: CalendarIcon },
+  { href: "/admin/report-activity", label: "Тайлангийн үзэлт", icon: EyeIcon },
 ];
 
 export const clubNavItems = [
