@@ -116,6 +116,7 @@ export const HELP_DEFENSE_TYPES: TypeOption[] = [
 export const SHOT_MODIFIERS: { field: string; label: string }[] = [
   { field: "andOne", label: "and 1" },
   { field: "contestedClose", label: "contested (< 0.6 m.)" },
+  { field: "lateClock", label: "late clock" },
   { field: "lightlyContested", label: "lightly contested (< 1.2 m.)" },
   { field: "uncontested", label: "uncontested (< 1.8 m.)" },
   { field: "wideOpen", label: "wide open (> 1.8 m.)" },

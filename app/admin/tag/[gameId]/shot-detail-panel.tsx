@@ -82,11 +82,11 @@ export function ShotDetailPanel({
       player as RosterPlayer,
       {
         andOne: isMade && !!modifiers.andOne,
-        // Bad Miss / Late Clock / Shot Quality are no longer asked for (no
+        // Bad Miss / Shot Quality are no longer asked for (no
         // report uses them); keep whatever an older tag already stored.
         badMiss: !isMade && !!initial?.details.badMiss,
         contestedClose: !!modifiers.contestedClose,
-        lateClock: !!initial?.details.lateClock,
+        lateClock: !!modifiers.lateClock,
         lightlyContested: !!modifiers.lightlyContested,
         uncontested: !!modifiers.uncontested,
         wideOpen: !!modifiers.wideOpen,
