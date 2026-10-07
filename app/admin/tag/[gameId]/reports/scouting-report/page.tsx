@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import type { RosterWithPlayer, SeasonTeamWithTeam, Team } from "@/lib/types";
 import { getReportHeaderInfo } from "../shared-data";
 import { ReportHeader } from "../report-header";
+import { GameAnalysis } from "../game-analysis";
 import { elapsedSeconds } from "../game-summary/summary-stats";
 import { ScoutingReportClient, type ScoutingPlayer } from "./scouting-report-client";
 
@@ -113,6 +114,10 @@ export default async function ScoutingReportPage({
             activeSlug="scouting-report"
             info={info}
           />
+        </div>
+
+        <div className="mt-6">
+          <GameAnalysis gameId={gameId} />
         </div>
 
         <div className="mt-8">

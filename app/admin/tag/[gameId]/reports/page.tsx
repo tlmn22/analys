@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ClipboardListIcon } from "lucide-react";
 import { getReportHeaderInfo } from "./shared-data";
 import { ReportHeader } from "./report-header";
+import { GameAnalysis } from "./game-analysis";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,9 @@ export default async function ReportsHubPage({
             activeSlug={null}
             info={info}
           />
+        </div>
+        <div className="mt-6">
+          <GameAnalysis gameId={gameId} />
         </div>
       </div>
     </div>
