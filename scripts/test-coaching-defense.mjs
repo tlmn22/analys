@@ -153,3 +153,29 @@ test("box outs are counted per player, worst first, with opponent offensive rebo
   assert.equal(boxoutRate(1, 3), 0.25);
   assert.equal(boxoutRate(0, 0), null);
 });
+
+test("possession types: each trip counted once, transition first, unmatched points kept", () => {
+  const types = loadTypes();
+  const events = [
+    ev(5, "set_offense", H), ev(8, "2pt_made", H, { points: 2 }),          // set
+    ev(20, "2pt_made", V, { points: 2 }),
+    ev(25, "transition", H), ev(26, "set_offense", H), ev(28, "3pt_made", H, { points: 3 }), // transition wins
+    ev(40, "2pt_miss", V), ev(41, "def_reb", H),
+    ev(45, "2pt_made", H, { points: 2, andOne: true }), ev(46, "ft_made", H, { points: 1 }), // unstructured + trailing and-one FT
+    ev(60, "slob", V), ev(62, "turnover", V),
+    ev(70, "2pt_miss", H), ev(75, "3pt_made", V, { points: 3 }),             // untagged def reb: V scores "without the ball"
+  ];
+  const { rows, unmatched } = types.computePossessionTypes(events, H, V);
+  const byType = Object.fromEntries(rows.map((r) => [r.type, [r.possessions, r.points]]));
+  assert.deepEqual(byType, { transition: [1, 3], inbound: [0, 0], set: [1, 2], unstructured: [2, 3] });
+  const v = types.computePossessionTypes(events, V, H);
+  assert.equal(v.rows.find((r) => r.type === "inbound").turnovers, 1);
+  assert.equal(v.rows.reduce((s, r) => s + r.points, 0) + v.unmatched.points, 5);
+  assert.equal(unmatched.points, 0);
+});
+
+function loadTypes() {
+  files.types = `${reports}possession-types.ts`;
+  files["./game-summary/pace-stats"] = files["../game-summary/pace-stats"];
+  return load("types");
+}

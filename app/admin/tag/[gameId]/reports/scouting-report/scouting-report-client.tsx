@@ -16,6 +16,15 @@ import { computePossessions } from "../game-summary/pace-stats";
 import { computeActionRows } from "../screens-pnr/screen-stats";
 import { boxoutRate, computeBoxoutSummary } from "./boxout-stats";
 import { computeStarters, splitRotation, type LineupEvent } from "./rotation-stats";
+import { computePossessionTypes, type PossessionType } from "../possession-types";
+
+const POSSESSION_TYPE_STYLE: Record<Exclude<PossessionType, "unmatched">, { label: string; bar: string }> = {
+  transition: { label: "Хурдан довтолгоо", bar: "bg-emerald-500" },
+  set: { label: "Хувилбартай", bar: "bg-sky-500" },
+  inbound: { label: "BLOB / SLOB", bar: "bg-violet-500" },
+  unstructured: { label: "Замбараагүй", bar: "bg-zinc-400 dark:bg-zinc-500" },
+};
+const POSSESSION_TYPE_ORDER = ["transition", "set", "inbound", "unstructured"] as const;
 import { ChevronRightIcon } from "lucide-react";
 
 export interface ScoutingPlayer extends RosterPlayer {
@@ -323,6 +332,9 @@ function TeamColumn({
     return [...rows.values()].sort((a, b) => b.count - a.count);
   }, [rawEvents, teamId, opponentTeamId]);
   const boxouts = useMemo(() => computeBoxoutSummary(rawEvents, teamId, opponentTeamId), [rawEvents, teamId, opponentTeamId]);
+  const possessionTypes = useMemo(() => computePossessionTypes(rawEvents, teamId, opponentTeamId), [rawEvents, teamId, opponentTeamId]);
+  const totalPossessions = possessionTypes.rows.reduce((s, r) => s + r.possessions, 0);
+  const typeRow = (type: Exclude<PossessionType, "unmatched">) => possessionTypes.rows.find((r) => r.type === type)!;
   const boxoutPct = boxoutRate(boxouts.good.length, boxouts.bad.length);
   const rosterById = new Map(roster.map((p) => [p.playerId, p]));
 
@@ -353,6 +365,40 @@ function TeamColumn({
 
   return (
     <div className="flex flex-col gap-4">
+      <SectionCard title={`${teamName} — Довтолгооны бүтэц`} accentColor={teamColor}>
+        <p className="text-xs text-muted-foreground">{totalPossessions} эзэмшил · эзэмшил бүр нэг төрөлд · оноо / эзэмшил · PPP</p>
+        {totalPossessions > 0 && (
+          <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+            {POSSESSION_TYPE_ORDER.map((type) => {
+              const share = typeRow(type).possessions / totalPossessions;
+              return share > 0 ? <div key={type} className={POSSESSION_TYPE_STYLE[type].bar} style={{ width: `${share * 100}%` }} /> : null;
+            })}
+          </div>
+        )}
+        {POSSESSION_TYPE_ORDER.map((type) => {
+          const r = typeRow(type);
+          const pct = totalPossessions ? Math.round((r.possessions / totalPossessions) * 100) : 0;
+          return (
+            <StatRow
+              key={type}
+              label={`${POSSESSION_TYPE_STYLE[type].label} · ${pct}% · FG ${frac(r.fgm, r.fga)} · TO ${r.turnovers}`}
+              value={allowed(r.points, r.possessions)}
+              bold
+              onClick={() => onOpenClips(`${teamName} — ${POSSESSION_TYPE_STYLE[type].label}`, r.events)}
+            />
+          );
+        })}
+        {possessionTypes.unmatched.points > 0 && (
+          <button
+            type="button"
+            className="text-left text-xs text-muted-foreground hover:underline"
+            onClick={() => onOpenClips(`${teamName} — эзэмшилд хамааруулаагүй`, possessionTypes.unmatched.events)}
+          >
+            Эзэмшилд хамааруулж чадаагүй {possessionTypes.unmatched.points} оноо (Def Reb зэрэг tag дутуу).
+          </button>
+        )}
+      </SectionCard>
+
       <SectionCard title={`${teamName} — Offense`} accentColor={teamColor}>
         <StatRow
           label="Хувилбар дээрээс"
