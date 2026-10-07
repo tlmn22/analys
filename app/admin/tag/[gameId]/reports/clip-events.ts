@@ -41,6 +41,10 @@ const EVENT_LABELS: Record<string, string> = {
   screen_rcvd: "Screen Rcvd.",
   physical_contact: "Physical Contact",
   hustle_play: "Hustle Play",
+  good_defense: "Good Defense",
+  bad_defense: "Bad Defense",
+  help_defense: "Help Defense",
+  boxout: "Box Out",
 };
 
 const BADGE_COLORS: Record<string, string> = {

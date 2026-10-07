@@ -59,6 +59,8 @@ export interface RawEvent {
   foulCorrectCall?: boolean;
   setOffenseName?: string | null;
   boxoutType?: string | null;
+  defenseType?: string | null;
+  helpDefenseType?: string | null;
 }
 
 export interface PeriodTotal {

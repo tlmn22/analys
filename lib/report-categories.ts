@@ -15,6 +15,8 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
   { slug: "player-impact", label: "Player Impact" },
   { slug: "shot-analysis", label: "Shot Analysis" },
   { slug: "hustle-contact", label: "Hustle & Contact" },
+  { slug: "defense-quality", label: "Defense & Box Out" },
+  { slug: "test", label: "Test" },
   { slug: "screens-pnr", label: "Screens & PnR" },
   { slug: "matchups", label: "Matchups" },
   { slug: "three-pt-contest", label: "3PT Contest" },
