@@ -13,12 +13,15 @@ export function ReportHeader({
   title,
   activeSlug,
   info,
+  showNav = true,
 }: {
   gameId: string;
   icon: ReactNode;
   title: string;
   activeSlug: string | null;
   info: ReportHeaderInfo;
+  /** False on public (logged-out) views, where the other reports need a login. */
+  showNav?: boolean;
 }) {
   const { game, homeTeamName, visitorTeamName, homeScore, visitorScore } = info;
 
@@ -36,7 +39,7 @@ export function ReportHeader({
       </p>
       <p className="font-mono text-xs text-muted-foreground">Game ID {gameId}</p>
 
-      <nav className="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5 border-y border-border py-3 text-sm">
+      {showNav && <nav className="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5 border-y border-border py-3 text-sm">
         {REPORT_CATEGORIES.map((c, i) => (
           <span key={c.slug} className="flex items-center gap-2">
             {i > 0 && <span className="text-muted-foreground">|</span>}
@@ -52,7 +55,7 @@ export function ReportHeader({
             )}
           </span>
         ))}
-      </nav>
+      </nav>}
     </div>
   );
 }

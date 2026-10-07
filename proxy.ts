@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME, readSessionToken } from "@/lib/auth";
+import { isPublicReportPath } from "@/lib/public-reports";
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -11,6 +12,7 @@ export async function proxy(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
   const session = token ? await readSessionToken(token) : null;
   if (!session) {
+    if (isPublicReportPath(pathname)) return NextResponse.next();
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = "/admin/login";
     return NextResponse.redirect(loginUrl);

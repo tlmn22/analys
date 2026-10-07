@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BinocularsIcon } from "lucide-react";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getEventEditor } from "@/lib/club-event-access";
 import type { RosterWithPlayer, SeasonTeamWithTeam, Team } from "@/lib/types";
 import { getReportHeaderInfo } from "../shared-data";
 import { ReportHeader } from "../report-header";
@@ -17,7 +18,9 @@ export default async function ScoutingReportPage({
   params: Promise<{ gameId: string }>;
 }) {
   const { gameId } = await params;
-  const info = await getReportHeaderInfo(gameId);
+  const [info, viewer] = await Promise.all([getReportHeaderInfo(gameId), getEventEditor()]);
+  // Logged-out visitors (public game, see lib/public-reports.ts) can't open the other admin pages.
+  const signedIn = !!viewer;
   if (!info) notFound();
 
   const db = supabaseAdmin();
@@ -103,9 +106,11 @@ export default async function ScoutingReportPage({
   return (
     <div className="min-h-screen bg-background p-6 text-foreground">
       <div className="mx-auto max-w-[1600px]">
-        <Link href="/admin/scouting-reports" className="text-sm text-blue-500 hover:underline">
-          ← Scouting Reports
-        </Link>
+        {signedIn && (
+          <Link href="/admin/scouting-reports" className="text-sm text-blue-500 hover:underline">
+            ← Scouting Reports
+          </Link>
+        )}
         <div className="mt-3">
           <ReportHeader
             gameId={gameId}
@@ -113,6 +118,7 @@ export default async function ScoutingReportPage({
             title="Scouting Report"
             activeSlug="scouting-report"
             info={info}
+            showNav={signedIn}
           />
         </div>
 

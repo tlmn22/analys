@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { reportAccess } from "@/lib/scouting-access";
+import { PUBLIC_SCOUTING_REPORT_GAME_IDS } from "@/lib/public-reports";
 import type { Game, Team } from "@/lib/types";
 
 export interface ReportHeaderInfo {
@@ -14,7 +15,8 @@ export interface ReportHeaderInfo {
  * here rather than duplicated per report. Returns null if the game doesn't
  * exist (caller should notFound()). */
 export async function getReportHeaderInfo(gameId: string): Promise<ReportHeaderInfo | null> {
-  if (!await reportAccess(gameId)) return null;
+  // Public games: proxy.ts only lets logged-out visitors reach their Scouting Report.
+  if (!PUBLIC_SCOUTING_REPORT_GAME_IDS.has(gameId) && !await reportAccess(gameId)) return null;
   const db = supabaseAdmin();
 
   const { data: gameRow } = await db.from("games").select("*").eq("id", gameId).maybeSingle();
